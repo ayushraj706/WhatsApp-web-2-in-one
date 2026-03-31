@@ -7,13 +7,15 @@ import { Input } from "@/components/ui/input";
 import { 
     Send, Paperclip, ArrowLeft, MoreVertical, 
     Download, Check, CheckCheck, Zap, 
-    ImageIcon, Video, Music, FileText, Sticker as StickerIcon 
+    ImageIcon, Video, Music, FileText, Phone, Sticker as StickerIcon
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { io, Socket } from "socket.io-client";
 import { toast } from "sonner";
-import { getChatMessages, sendChatMessage, sendMediaMessage } from "@/app/dashboard/chat/actions";
+// Yahan sendInteractiveMessage action add kiya hai
+import { getChatMessages, sendChatMessage, sendMediaMessage, sendInteractiveMessage } from "@/app/dashboard/chat/actions";
+import { InteractiveMessageDialog } from "./interactive-dialog";
 
 interface Message {
     keyId: string;
@@ -21,7 +23,7 @@ interface Message {
     fromMe: boolean;
     timestamp: string;
     type: string;
-    status: string; // 1: sent, 2: delivered, 3: read
+    status: string; 
     pushName?: string;
     mediaUrl?: string;
     remoteJid?: string;
@@ -32,12 +34,12 @@ interface ChatWindowProps {
     jid: string;
     name?: string;
     onBack?: () => void;
-    onInteractiveOpen?: () => void; // Interactive button handler
 }
 
-export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: ChatWindowProps) {
+export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState("");
+    const [isInteractiveOpen, setIsInteractiveOpen] = useState(false); // State for Dialog
     const scrollRef = useRef<HTMLDivElement>(null);
     const [socket, setSocket] = useState<Socket | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +89,18 @@ export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: 
         }
     };
 
+    // --- Buttons Message Handler ---
+    const handleSendInteractive = async (data: any) => {
+        try {
+            toast.info("Sending buttons...");
+            await sendInteractiveMessage(sessionId, jid, data);
+            toast.success("Buttons sent successfully!");
+            setTimeout(() => fetchMessages(), 800);
+        } catch (error: any) {
+            toast.error("Failed to send buttons");
+        }
+    };
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -118,7 +132,7 @@ export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: 
 
     return (
         <div className="flex flex-col h-full bg-[#efeae2] dark:bg-[#0b141a] overflow-hidden">
-            {/* --- Fixed Header --- */}
+            {/* Header: Sticky */}
             <div className="h-16 px-4 border-b bg-[#f0f2f5] dark:bg-[#202c33] flex items-center justify-between z-20 shadow-sm flex-shrink-0">
                 <div className="flex items-center gap-3">
                     {onBack && (
@@ -142,14 +156,14 @@ export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: 
                 </div>
             </div>
 
-            {/* --- Messages Area (Scrollable) --- */}
+            {/* Messages Area */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 styled-scrollbar" style={{
                 backgroundImage: `url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')`,
                 backgroundRepeat: 'repeat',
                 backgroundSize: '400px'
             }}>
                 <div className="max-w-4xl mx-auto space-y-1">
-                    {messages.map((msg, idx) => (
+                    {messages.map((msg) => (
                         <div key={msg.keyId} className={cn("flex w-full mb-1", msg.fromMe ? "justify-end" : "justify-start")}>
                             <div className={cn(
                                 "relative max-w-[85%] sm:max-w-[70%] px-2.5 py-1.5 rounded-lg shadow-md",
@@ -157,15 +171,13 @@ export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: 
                                     ? "bg-[#dcf8c6] dark:bg-[#005c4b] rounded-tr-none text-gray-800 dark:text-gray-100" 
                                     : "bg-white dark:bg-[#202c33] rounded-tl-none text-gray-800 dark:text-gray-100 border border-black/5"
                             )}>
-                                {/* Media Handling */}
                                 {msg.mediaUrl && (
                                     <div className="mb-1 rounded-md overflow-hidden bg-black/5">
-                                        {msg.type === 'IMAGE' && <img src={msg.mediaUrl} className="max-h-72 w-full object-cover cursor-pointer hover:opacity-90" />}
+                                        {msg.type === 'IMAGE' && <img src={msg.mediaUrl} className="max-h-72 w-full object-cover" />}
                                         {msg.type === 'VIDEO' && <video src={msg.mediaUrl} controls className="max-h-72 w-full" />}
                                         {msg.type === 'AUDIO' && <audio src={msg.mediaUrl} controls className="w-full h-10 p-1" />}
                                     </div>
                                 )}
-
                                 <div className="flex flex-col">
                                     <span className="text-[13.5px] leading-relaxed pr-10">{msg.content}</span>
                                     <div className="flex items-center justify-end gap-1 -mt-1 self-end">
@@ -182,7 +194,7 @@ export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: 
                 </div>
             </div>
 
-            {/* --- Fixed Input Area --- */}
+            {/* Input Area: Fixed */}
             <div className="px-3 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-t z-20 flex-shrink-0">
                 <div className="flex items-center gap-2 max-w-4xl mx-auto">
                     <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
@@ -214,7 +226,7 @@ export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: 
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                            className="h-10 rounded-full border-none bg-white dark:bg-[#2a3942] pl-4 pr-10 focus-visible:ring-0 shadow-sm"
+                            className="h-10 rounded-full border-none bg-white dark:bg-[#2a3942] shadow-sm"
                         />
                     </div>
 
@@ -222,8 +234,8 @@ export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: 
                         <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-10 w-10 rounded-full text-primary hover:bg-primary/10"
-                            onClick={onInteractiveOpen}
+                            className="h-10 w-10 rounded-full text-primary"
+                            onClick={() => setIsInteractiveOpen(true)} // Open Popup
                         >
                             <Zap className="h-5 w-5 fill-current" />
                         </Button>
@@ -231,13 +243,20 @@ export function ChatWindow({ sessionId, jid, name, onBack, onInteractiveOpen }: 
                             onClick={handleSend}
                             disabled={!newMessage.trim()}
                             size="icon"
-                            className="h-10 w-10 rounded-full bg-[#00a884] hover:bg-[#008f6f] text-white shadow-md transition-transform active:scale-95"
+                            className="h-10 w-10 rounded-full bg-[#00a884] text-white shadow-md active:scale-95"
                         >
                             <Send className="h-5 w-5 ml-0.5" />
                         </Button>
                     </div>
                 </div>
             </div>
+
+            {/* Interactive Buttons Dialog */}
+            <InteractiveMessageDialog 
+                isOpen={isInteractiveOpen} 
+                onClose={() => setIsInteractiveOpen(false)} 
+                onSend={handleSendInteractive} 
+            />
         </div>
     )
 }
