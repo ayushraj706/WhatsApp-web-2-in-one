@@ -99,3 +99,25 @@ export async function sendMediaMessage(formData: FormData) {
         throw new Error(`Failed to send media: ${error.message}`);
     }
 }
+
+/**
+ * Naya Function: Send Interactive (Buttons) Message
+ * Isse frontend ka Zap button connect hoga
+ */
+export async function sendInteractiveMessage(sessionId: string, jid: string, data: { text: string, footer: string, buttons: string[] }) {
+    const user = await getAuthenticatedUserForAction();
+    if (!user) throw new Error("Unauthorized");
+
+    // Access check
+    const canAccess = await canAccessSession(user.id, user.role, sessionId);
+    if (!canAccess) throw new Error("Forbidden");
+
+    try {
+        // ChatService mein naya method call kar rahe hain
+        await ChatService.sendInteractiveMessage(sessionId, jid, data);
+        return { success: true };
+    } catch (error: any) {
+        console.error("Interactive send error:", error);
+        throw new Error(`Failed to send buttons: ${error.message}`);
+    }
+}
