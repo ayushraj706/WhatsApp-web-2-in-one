@@ -4,7 +4,6 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.spotify.glassmusic.data.model.Song
 import com.spotify.glassmusic.data.model.Playlist
 import com.spotify.glassmusic.data.repository.MusicRepository
 import kotlinx.coroutines.launch

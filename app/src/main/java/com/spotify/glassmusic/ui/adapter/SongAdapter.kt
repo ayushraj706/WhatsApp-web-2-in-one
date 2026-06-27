@@ -6,7 +6,6 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.spotify.glassmusic.data.model.Song
 import com.spotify.glassmusic.databinding.ItemSongCardBinding
 
 class SongAdapter(private val onClick: (Song) -> Unit) : 
