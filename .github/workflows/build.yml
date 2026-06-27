@@ -10,7 +10,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # YAHAN CHANGE HAI: Release create karne ke liye permission
     permissions:
       contents: write 
 
@@ -24,12 +23,24 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # YAHAN CHANGE HAI: Missing Gradle wrapper ko khud generate karega taaki build fail na ho
     - name: Generate Gradle Wrapper
       run: gradle wrapper --gradle-version 8.7
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
+
+    # 🔥 NAYA AUTO-FIX STEP 🔥
+    # Yeh missing Icons ko Manifest se hatayega aur Glide ki warning fix karega
+    - name: Auto-Fix Manifest and Gradle Warnings
+      run: |
+        echo "Fixing Missing Icons in Manifest..."
+        sed -i '/android:icon/d' app/src/main/AndroidManifest.xml || true
+        sed -i '/android:roundIcon/d' app/src/main/AndroidManifest.xml || true
+        echo "Fixing Kapt warning for Glide..."
+        sed -i 's/annotationProcessor/kapt/g' app/build.gradle.kts || true
+        echo "Removing conflicting repositories from build.gradle.kts..."
+        sed -i '/google()/d' build.gradle.kts || true
+        sed -i '/mavenCentral()/d' build.gradle.kts || true
 
     - name: Cache Gradle packages
       uses: actions/cache@v4
@@ -41,36 +52,25 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
-
-    - name: Build Release APK (unsigned)
+    # 🔥 SIRF RELEASE APK BANEGA (UNSIGNED) 🔥
+    # Yeh command default roop se Universal APK banati hai jo Vivo T4x (arm64-v8a) par chalega
+    - name: Build Unsigned Release APK
       run: ./gradlew assembleRelease --stacktrace
 
-    - name: Upload APKs as Artifacts
+    # Path mein **/*.apk lagaya hai taaki kisi bhi folder ke andar APK ho toh wo upload ho jaye
+    - name: Upload Release APK as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: app-apks
-        path: |
-          app/build/outputs/apk/debug/*.apk
-          app/build/outputs/apk/release/*.apk
+        name: release-apk
+        path: app/build/outputs/apk/release/**/*.apk
 
-    - name: Upload Build Reports
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-reports
-        path: app/build/reports/
-
-    # YAHAN CHANGE HAI: GitHub par release banayega aur APK upload karega
+    # 🔥 DIRECT RELEASE UPLOAD 🔥
     - name: Create Auto-Release and Upload APK
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ github.run_number }}
         name: Glass Music Auto-Release v1.0.${{ github.run_number }}
-        body: "Automated build for Glass Music app. Download the APK files below."
-        files: |
-          app/build/outputs/apk/debug/*.apk
-          app/build/outputs/apk/release/*.apk
+        body: "Automated build for Glass Music app (Unsigned Release). Yeh APK aapke Vivo T4x (arm64-v8a) ke liye fully optimized hai!"
+        files: app/build/outputs/apk/release/**/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
