@@ -113,7 +113,8 @@ class SearchActivity : AppCompatActivity() {
 
                 if (results.isEmpty()) {
                     binding.tvNoResults.visibility = View.VISIBLE
-                    binding.tvNoResults.text = "No results found for "$query""
+                    // 🔥 YAHAN FIX KIYA HAI 🔥
+                    binding.tvNoResults.text = "No results found for '$query'"
                 } else {
                     searchAdapter.submitList(results)
                 }
