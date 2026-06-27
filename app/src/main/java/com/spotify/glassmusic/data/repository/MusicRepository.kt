@@ -2,17 +2,14 @@ package com.spotify.glassmusic.data.repository
 
 import android.util.Log
 import com.spotify.glassmusic.data.model.Song
-import com.spotify.glassmusic.data.model.Artist
-import com.spotify.glassmusic.data.model.Playlist
 import com.spotify.glassmusic.data.model.LyricsLine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.stream.StreamInfo
-import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
+import org.schabi.newpipe.extractor.stream.StreamInfoItem // 🔥 YEH IMPORT ZAROORI HAI 🔥
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
 
 class MusicRepository {
 
@@ -29,16 +26,19 @@ class MusicRepository {
             )
 
             searchInfo.relatedItems.mapNotNull { item ->
+                // 🔥 YAHAN CASTING KIYA HAI 🔥
+                val streamItem = item as? StreamInfoItem ?: return@mapNotNull null
+                
                 try {
                     Song(
-                        id = item.url,
-                        title = item.name,
-                        artist = item.uploaderName ?: "Unknown Artist",
+                        id = streamItem.url,
+                        title = streamItem.name,
+                        artist = streamItem.uploaderName ?: "Unknown Artist",
                         album = "",
-                        duration = item.duration * 1000L,
-                        thumbnailUrl = item.thumbnailUrl,
-                        audioUrl = item.url,
-                        videoUrl = item.url
+                        duration = streamItem.duration * 1000L,
+                        thumbnailUrl = streamItem.thumbnailUrl,
+                        audioUrl = streamItem.url,
+                        videoUrl = streamItem.url
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing song: ${e.message}")
@@ -66,13 +66,7 @@ class MusicRepository {
 
     suspend fun getLyrics(title: String, artist: String): List<LyricsLine> = withContext(Dispatchers.IO) {
         try {
-            // Try Genius lyrics first
-            val searchQuery = "$title $artist lyrics genius"
-            val doc = Jsoup.connect("https://www.google.com/search?q=${searchQuery.replace(" ", "+")}")
-                .userAgent("Mozilla/5.0")
-                .get()
-
-            // Fallback: return demo lyrics
+            // Try Genius lyrics logic can be expanded here
             getDemoLyrics(title)
         } catch (e: Exception) {
             getDemoLyrics(title)
