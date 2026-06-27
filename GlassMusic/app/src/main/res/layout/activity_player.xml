@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Blurred Background -->
+    <ImageView
+        android:id="@+id/bgBlur"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop" />
+
+    <!-- Dark Overlay for Glass Effect -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/player_gradient_overlay" />
+
+    <!-- Main Content -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <!-- Top Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            android:gravity="center_vertical">
+
+            <ImageButton
+                android:id="@+id/btnBack"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_arrow_down"
+                android:padding="10dp"
+                app:tint="@color/white" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginHorizontal="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Now Playing"
+                    android:textColor="@color/white_60"
+                    android:textSize="12sp"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.1" />
+
+                <TextView
+                    android:id="@+id/tvAlbum"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btnMore"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_more_vert"
+                android:padding="10dp"
+                app:tint="@color/white" />
+        </LinearLayout>
+
+        <!-- Album Art Container with Glass Card -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="32dp"
+            android:layout_marginVertical="16dp">
+
+            <!-- Glass Card Background -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/glass_album_bg"
+                android:layout_margin="8dp" />
+
+            <!-- Album Art -->
+            <ImageView
+                android:id="@+id/ivAlbumArt"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:background="@drawable/rounded_image_bg_large"
+                android:clipToOutline="true"
+                android:elevation="12dp" />
+        </FrameLayout>
+
+        <!-- Song Info -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="32dp"
+            android:paddingVertical="16dp"
+            android:gravity="center_vertical">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/tvArtist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white_70"
+                    android:textSize="16sp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btnFavorite"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_favorite_border"
+                android:padding="10dp"
+                app:tint="@color/accent_green" />
+        </LinearLayout>
+
+        <!-- Lyrics Container (Hidden by default) -->
+        <FrameLayout
+            android:id="@+id/lyricsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:layout_marginHorizontal="32dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/glass_card_bg"
+            android:visibility="gone"
+            android:alpha="0">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/tvLyrics"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    android:lineSpacingMultiplier="1.5"
+                    android:gravity="center"
+                    android:text="Lyrics will appear here..." />
+            </ScrollView>
+        </FrameLayout>
+
+        <!-- Progress Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="32dp"
+            android:paddingVertical="8dp">
+
+            <SeekBar
+                android:id="@+id/seekBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:progressDrawable="@drawable/glass_seekbar"
+                android:thumb="@drawable/glass_seekbar_thumb"
+                android:splitTrack="false"
+                android:paddingVertical="8dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvCurrentTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00"
+                    android:textColor="@color/white_60"
+                    android:textSize="12sp" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tvTotalTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00"
+                    android:textColor="@color/white_60"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Control Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingVertical="16dp">
+
+            <ImageButton
+                android:id="@+id/btnShuffle"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_shuffle"
+                android:padding="10dp"
+                android:alpha="0.5"
+                app:tint="@color/white" />
+
+            <ImageButton
+                android:id="@+id/btnPrevious"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="16dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_skip_previous"
+                android:padding="12dp"
+                app:tint="@color/white" />
+
+            <ImageButton
+                android:id="@+id/btnPlayPause"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_marginHorizontal="24dp"
+                android:background="@drawable/glass_play_button_bg"
+                android:src="@drawable/ic_play_circle"
+                android:padding="16dp"
+                app:tint="@color/white"
+                android:elevation="8dp" />
+
+            <ImageButton
+                android:id="@+id/btnNext"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="16dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_skip_next"
+                android:padding="12dp"
+                app:tint="@color/white" />
+
+            <ImageButton
+                android:id="@+id/btnRepeat"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_repeat"
+                android:padding="10dp"
+                app:tint="@color/white" />
+        </LinearLayout>
+
+        <!-- Bottom Actions -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingBottom="32dp"
+            android:paddingTop="8dp">
+
+            <ImageButton
+                android:id="@+id/btnLyrics"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_lyrics"
+                android:padding="10dp"
+                app:tint="@color/white_70" />
+
+            <ImageButton
+                android:id="@+id/btnQueue"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="32dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_queue"
+                android:padding="10dp"
+                app:tint="@color/white_70" />
+
+            <ImageButton
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="32dp"
+                android:background="@drawable/glass_circle_button"
+                android:src="@drawable/ic_share"
+                android:padding="10dp"
+                app:tint="@color/white_70" />
+        </LinearLayout>
+
+    </LinearLayout>
+</FrameLayout>
