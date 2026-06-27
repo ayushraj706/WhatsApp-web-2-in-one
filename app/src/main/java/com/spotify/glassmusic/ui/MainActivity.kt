@@ -13,10 +13,11 @@ import androidx.core.view.updatePadding
 import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
-import jp.wasabeef.glide.transformations.BlurTransformation // 🔥 FIX: Correct import
+import jp.wasabeef.glide.transformations.BlurTransformation
 import com.spotify.glassmusic.R
 import com.spotify.glassmusic.databinding.ActivityMainBinding
 import com.spotify.glassmusic.player.MusicPlayerManager
+import com.spotify.glassmusic.data.model.Song // 🔥 FIX: Import added 🔥
 import com.spotify.glassmusic.ui.adapter.SongAdapter
 import com.spotify.glassmusic.ui.adapter.PlaylistAdapter
 import com.spotify.glassmusic.ui.viewmodel.MainViewModel
@@ -59,7 +60,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupEdgeToEdge() {
-        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             binding.statusBarBg.updatePadding(top = systemBars.top)
             binding.miniPlayerContainer.updatePadding(bottom = systemBars.bottom)
@@ -85,7 +86,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         playlistAdapter = PlaylistAdapter { playlist ->
-            // Open playlist logic
+            // Open playlist
         }
         binding.rvPlaylists.apply {
             layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
