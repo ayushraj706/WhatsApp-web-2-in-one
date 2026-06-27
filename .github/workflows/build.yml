@@ -3,12 +3,14 @@ name: Build and Release Android APK
 on:
   push:
     branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Yeh permission zaroori hai GitHub par auto-release create karne ke liye
+    # YAHAN CHANGE HAI: Release create karne ke liye permission
     permissions:
       contents: write 
 
@@ -21,10 +23,23 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
+
+    # YAHAN CHANGE HAI: Missing Gradle wrapper ko khud generate karega taaki build fail na ho
+    - name: Generate Gradle Wrapper
+      run: gradle wrapper --gradle-version 8.7
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
+
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
 
     - name: Build Debug APK
       run: ./gradlew assembleDebug --stacktrace
@@ -32,7 +47,6 @@ jobs:
     - name: Build Release APK (unsigned)
       run: ./gradlew assembleRelease --stacktrace
 
-    # Yeh step Actions tab ke andar ZIP file save karega
     - name: Upload APKs as Artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -41,13 +55,20 @@ jobs:
           app/build/outputs/apk/debug/*.apk
           app/build/outputs/apk/release/*.apk
 
-    # Yeh step aapke repo mein "Releases" section banayega aur APK wahan attach karega
+    - name: Upload Build Reports
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-reports
+        path: app/build/reports/
+
+    # YAHAN CHANGE HAI: GitHub par release banayega aur APK upload karega
     - name: Create Auto-Release and Upload APK
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ github.run_number }}
         name: Glass Music Auto-Release v1.0.${{ github.run_number }}
-        body: "Automated build for Glass Music app. Download the APKs below."
+        body: "Automated build for Glass Music app. Download the APK files below."
         files: |
           app/build/outputs/apk/debug/*.apk
           app/build/outputs/apk/release/*.apk
