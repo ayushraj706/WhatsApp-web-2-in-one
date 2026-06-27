@@ -38,21 +38,21 @@ class DownloaderImpl private constructor() : Downloader() {
                     addHeader("User-Agent", USER_AGENT)
                 }
                 if (request.httpMethod() == "POST") {
-                    // Modern RequestBody syntax
                     post(request.dataToSend()?.toRequestBody() ?: byteArrayOf().toRequestBody())
                 }
             }
             .build()
 
         val response = client.newCall(okHttpRequest).execute()
-        
-        // Modern property access (no parentheses)
         val body = response.body?.string() ?: ""
+
+        // 🔥 FIX: Map<String, List<String>> ko Map<String, String> mein convert kiya 🔥
+        val headersMap = response.headers.toMultimap().mapValues { it.value.firstOrNull() ?: "" }
 
         return Response(
             response.code,
             response.message,
-            response.headers.toMultimap(), // NewPipe expects Map<String, List<String>>
+            headersMap, 
             body,
             request.url()
         )
