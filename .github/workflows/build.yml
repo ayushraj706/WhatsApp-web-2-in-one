@@ -1,15 +1,16 @@
-name: Build Android APK
+name: Build and Release Android APK
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Yeh permission zaroori hai GitHub par auto-release create karne ke liye
+    permissions:
+      contents: write 
 
     steps:
     - name: Checkout code
@@ -25,37 +26,30 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Cache Gradle packages
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-
     - name: Build Debug APK
       run: ./gradlew assembleDebug --stacktrace
 
     - name: Build Release APK (unsigned)
       run: ./gradlew assembleRelease --stacktrace
 
-    - name: Upload Debug APK
+    # Yeh step Actions tab ke andar ZIP file save karega
+    - name: Upload APKs as Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: debug-apk
-        path: app/build/outputs/apk/debug/*.apk
+        name: app-apks
+        path: |
+          app/build/outputs/apk/debug/*.apk
+          app/build/outputs/apk/release/*.apk
 
-    - name: Upload Release APK
-      uses: actions/upload-artifact@v4
+    # Yeh step aapke repo mein "Releases" section banayega aur APK wahan attach karega
+    - name: Create Auto-Release and Upload APK
+      uses: softprops/action-gh-release@v2
       with:
-        name: release-apk
-        path: app/build/outputs/apk/release/*.apk
-
-    - name: Upload Build Reports
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-reports
-        path: app/build/reports/
+        tag_name: v1.0.${{ github.run_number }}
+        name: Glass Music Auto-Release v1.0.${{ github.run_number }}
+        body: "Automated build for Glass Music app. Download the APKs below."
+        files: |
+          app/build/outputs/apk/debug/*.apk
+          app/build/outputs/apk/release/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
