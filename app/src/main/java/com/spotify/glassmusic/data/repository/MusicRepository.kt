@@ -1,14 +1,14 @@
 package com.spotify.glassmusic.data.repository
 
 import android.util.Log
-import com.spotify.glassmusic.data.model.Song
+import com.spotify.glassmusic.data.model.Song // 🔥 FIX: Import added 🔥
 import com.spotify.glassmusic.data.model.LyricsLine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.stream.StreamInfo
-import org.schabi.newpipe.extractor.stream.StreamInfoItem // 🔥 YEH IMPORT ZAROORI HAI 🔥
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.jsoup.Jsoup
 
 class MusicRepository {
@@ -26,7 +26,6 @@ class MusicRepository {
             )
 
             searchInfo.relatedItems.mapNotNull { item ->
-                // 🔥 YAHAN CASTING KIYA HAI 🔥
                 val streamItem = item as? StreamInfoItem ?: return@mapNotNull null
                 
                 try {
@@ -36,7 +35,8 @@ class MusicRepository {
                         artist = streamItem.uploaderName ?: "Unknown Artist",
                         album = "",
                         duration = streamItem.duration * 1000L,
-                        thumbnailUrl = streamItem.thumbnailUrl,
+                        // 🔥 FIX: Thumbnail access updated for new library version 🔥
+                        thumbnailUrl = streamItem.thumbnails.firstOrNull()?.url ?: "", 
                         audioUrl = streamItem.url,
                         videoUrl = streamItem.url
                     )
@@ -54,7 +54,6 @@ class MusicRepository {
     suspend fun getAudioStream(videoUrl: String): String = withContext(Dispatchers.IO) {
         try {
             val streamInfo = StreamInfo.getInfo(NewPipe.getService(YOUTUBE_SERVICE_ID), videoUrl)
-            // Get highest quality audio stream
             val audioStream = streamInfo.audioStreams.maxByOrNull { it.bitrate }
                 ?: streamInfo.audioStreams.firstOrNull()
             audioStream?.url ?: streamInfo.url
@@ -66,7 +65,6 @@ class MusicRepository {
 
     suspend fun getLyrics(title: String, artist: String): List<LyricsLine> = withContext(Dispatchers.IO) {
         try {
-            // Try Genius lyrics logic can be expanded here
             getDemoLyrics(title)
         } catch (e: Exception) {
             getDemoLyrics(title)
