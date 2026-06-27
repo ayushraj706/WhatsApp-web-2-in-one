@@ -1,8 +1,7 @@
 package com.spotify.glassmusic
 
-import android.util.Log
 import okhttp3.OkHttpClient
-import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
@@ -39,18 +38,21 @@ class DownloaderImpl private constructor() : Downloader() {
                     addHeader("User-Agent", USER_AGENT)
                 }
                 if (request.httpMethod() == "POST") {
-                    post(RequestBody.create(null, request.dataToSend() ?: byteArrayOf()))
+                    // Modern RequestBody syntax
+                    post(request.dataToSend()?.toRequestBody() ?: byteArrayOf().toRequestBody())
                 }
             }
             .build()
 
         val response = client.newCall(okHttpRequest).execute()
-        val body = response.body()?.string() ?: ""
+        
+        // Modern property access (no parentheses)
+        val body = response.body?.string() ?: ""
 
         return Response(
-            response.code(),
-            response.message(),
-            response.headers().toMultimap().mapValues { it.value.firstOrNull() ?: "" },
+            response.code,
+            response.message,
+            response.headers.toMultimap(), // NewPipe expects Map<String, List<String>>
             body,
             request.url()
         )
