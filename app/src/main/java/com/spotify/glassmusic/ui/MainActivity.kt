@@ -1,8 +1,6 @@
 package com.spotify.glassmusic.ui
 
 import android.content.Intent
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -12,19 +10,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
-import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
-import com.bumptech.glide.load.resource.bitmap.BlurTransformation
+import jp.wasabeef.glide.transformations.BlurTransformation // 🔥 FIX: Correct import
 import com.spotify.glassmusic.R
-import com.spotify.glassmusic.data.model.Song
 import com.spotify.glassmusic.databinding.ActivityMainBinding
 import com.spotify.glassmusic.player.MusicPlayerManager
 import com.spotify.glassmusic.ui.adapter.SongAdapter
 import com.spotify.glassmusic.ui.adapter.PlaylistAdapter
 import com.spotify.glassmusic.ui.viewmodel.MainViewModel
-import kotlinx.coroutines.launch
 
 @UnstableApi
 class MainActivity : AppCompatActivity() {
@@ -73,7 +68,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerViews() {
-        // Trending Songs
         trendingAdapter = SongAdapter { song ->
             playSong(song, viewModel.trendingSongs.value ?: emptyList())
         }
@@ -82,7 +76,6 @@ class MainActivity : AppCompatActivity() {
             adapter = trendingAdapter
         }
 
-        // Recommended Songs
         recommendedAdapter = SongAdapter { song ->
             playSong(song, viewModel.recommendedSongs.value ?: emptyList())
         }
@@ -91,9 +84,8 @@ class MainActivity : AppCompatActivity() {
             adapter = recommendedAdapter
         }
 
-        // Playlists
         playlistAdapter = PlaylistAdapter { playlist ->
-            // Open playlist
+            // Open playlist logic
         }
         binding.rvPlaylists.apply {
             layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
@@ -129,7 +121,6 @@ class MainActivity : AppCompatActivity() {
         viewModel.trendingSongs.observe(this) { songs ->
             trendingAdapter.submitList(songs)
             if (songs.isNotEmpty()) {
-                // Set blurred background from first song thumbnail
                 Glide.with(this)
                     .load(songs[0].thumbnailUrl)
                     .transform(BlurTransformation(25, 3))
@@ -175,7 +166,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Update mini player state
         playerManager.currentSong.value?.let {
             binding.miniPlayerContainer.visibility = View.VISIBLE
         }
