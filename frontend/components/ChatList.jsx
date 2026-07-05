@@ -34,7 +34,6 @@ export default function ChatList({ activeJid, onSelectChat }) {
 
   useEffect(() => {
     loadMore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function onScroll(e) {
@@ -43,33 +42,44 @@ export default function ChatList({ activeJid, onSelectChat }) {
   }
 
   return (
-    <div className="h-full flex flex-col border-r border-wa-divider bg-white">
-      <div className="px-4 py-3 border-b border-wa-divider flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Chats</h2>
+    <div className="h-full flex flex-col border-r border-gray-200 bg-white shadow-sm">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+        <h2 className="text-lg font-bold text-gray-800">Chats</h2>
       </div>
+
+      {/* Chat Items */}
       <div className="flex-1 overflow-y-auto thin-scroll" onScroll={onScroll}>
         {chats.map((chat) => (
           <button
             key={chat.jid}
             onClick={() => onSelectChat(chat.jid)}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-wa-divider hover:bg-gray-50 ${
-              activeJid === chat.jid ? 'bg-gray-100' : ''
+            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left border-b border-gray-50 hover:bg-gray-50 transition-colors duration-150 ${
+              activeJid === chat.jid ? 'bg-teal-50/50' : ''
             }`}
           >
-            <div className="w-12 h-12 rounded-full bg-wa-green-dark text-white flex items-center justify-center font-medium shrink-0">
+            {/* Avatar - Compact */}
+            <div className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center font-medium shrink-0 shadow-sm text-sm">
               {initialsFromJid(chat.jid)}
             </div>
+
+            {/* Chat Content */}
             <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-baseline">
-                <span className="font-medium truncate">{chat.jid.split('@')[0]}</span>
-                <span className="text-xs text-wa-text-secondary shrink-0 ml-2">
+              <div className="flex justify-between items-baseline mb-0.5">
+                <span className="font-semibold text-gray-900 truncate text-[15px]">
+                  {chat.jid.split('@')[0]}
+                </span>
+                <span className="text-[11px] text-gray-500 shrink-0 ml-2">
                   {formatTime(chat.lastMessageAt)}
                 </span>
               </div>
+              
               <div className="flex justify-between items-center">
-                <p className="text-sm text-wa-text-secondary truncate">{chat.lastMessage}</p>
+                <p className="text-[13px] text-gray-500 truncate w-[85%]">
+                  {chat.lastMessage}
+                </p>
                 {chat.unreadCount > 0 && (
-                  <span className="ml-2 bg-wa-green text-white text-xs rounded-full w-5 h-5 flex items-center justify-center shrink-0">
+                  <span className="bg-green-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0">
                     {chat.unreadCount}
                   </span>
                 )}
@@ -77,10 +87,16 @@ export default function ChatList({ activeJid, onSelectChat }) {
             </div>
           </button>
         ))}
+
         {!chats.length && !loading && (
-          <p className="text-center text-wa-text-secondary text-sm mt-8">No chats yet</p>
+          <p className="text-center text-gray-400 text-sm mt-8 italic">No chats yet</p>
         )}
-        {loading && <p className="text-center text-wa-text-secondary text-sm py-3">Loading…</p>}
+        
+        {loading && (
+          <div className="flex justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+          </div>
+        )}
       </div>
     </div>
   );
