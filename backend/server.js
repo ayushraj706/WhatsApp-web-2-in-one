@@ -27,8 +27,14 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '2mb' })); // JSON bodies only
 
+// 3. Cron-Job / Uptime Ping Tracker (Pura foolproof)
+app.get('/', (req, res) => {
+  res.status(200).send('BaseKey WhatsApp API is Zinda! 🚀 (Server Active)');
+});
+
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/chats', chatsRoutes);
 app.use('/api/messages', messagesRoutes);
