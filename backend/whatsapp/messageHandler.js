@@ -27,18 +27,25 @@ async function handleIncomingMessage(sock, upsert) {
 
     const direction = msg.key.fromMe ? 'out' : 'in';
     const firstTime = direction === 'in' ? await isFirstTimeContact(jid) : false;
+    
+    // YAHAN CHANGE HAI: WhatsApp se User ka naam (pushName) nikal rahe hain
+    const pushName = msg.pushName || 'User';
 
     await saveMessage(jid, msg, direction);
 
     if (direction === 'in') {
+      // Webhook me bhi pushName pass kar diya taaki API powerful bane
       fireOutgoingWebhook({
         event: 'message.received',
         jid,
+        pushName, // Naya field add kiya
         text: extractText(msg.message),
         timestamp: Date.now(),
       });
 
-      await runAutoResponder(sock, jid, extractText(msg.message), firstTime);
+      // YAHAN BADA CHANGE HAI: Auto-responder ko userData (pushName) bhej rahe hain 
+      // taaki wo %name%, %time% waigarah set kar sake
+      await runAutoResponder(sock, jid, extractText(msg.message), firstTime, { pushName });
     }
   }
 }
