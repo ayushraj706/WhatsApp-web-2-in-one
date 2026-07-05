@@ -58,18 +58,24 @@ async function saveMessage(jid, msg, direction) {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  await chatRef.set(
-    {
-      jid,
-      lastMessage: text || (messageType ? `[${messageType.replace('Message', '')}]` : ''),
-      lastMessageAt: Number(msg.messageTimestamp) * 1000 || Date.now(),
-      unreadCount:
-        direction === 'in'
-          ? admin.firestore.FieldValue.increment(1)
-          : admin.firestore.FieldValue.increment(0),
-    },
-    { merge: true }
-  );
+  // YAHAN CHANGE HAI: Parent document update object banaya
+  const updateData = {
+    jid,
+    lastMessage: text || (messageType ? `[${messageType.replace('Message', '')}]` : ''),
+    lastMessageAt: Number(msg.messageTimestamp) * 1000 || Date.now(),
+    unreadCount:
+      direction === 'in'
+        ? admin.firestore.FieldValue.increment(1)
+        : admin.firestore.FieldValue.increment(0),
+  };
+
+  // Agar message ke sath user ka asli naam aaya hai, toh usko bhi update payload me daal do
+  if (msg.pushName) {
+    updateData.pushName = msg.pushName;
+  }
+
+  // Firebase me save kar do
+  await chatRef.set(updateData, { merge: true });
 }
 
 async function isFirstTimeContact(jid) {
