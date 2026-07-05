@@ -58,9 +58,13 @@ export default function ChatList({ activeJid, onSelectChat }) {
               activeJid === chat.jid ? 'bg-teal-50/50' : ''
             }`}
           >
-            {/* Avatar - Compact */}
-            <div className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center font-medium shrink-0 shadow-sm text-sm">
-              {initialsFromJid(chat.jid)}
+            {/* Avatar with DP logic */}
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-teal-600 text-white flex items-center justify-center font-medium shrink-0 shadow-sm text-sm">
+              {chat.profilePic ? (
+                <img src={chat.profilePic} alt="DP" className="w-full h-full object-cover" />
+              ) : (
+                initialsFromJid(chat.jid)
+              )}
             </div>
 
             {/* Chat Content */}
