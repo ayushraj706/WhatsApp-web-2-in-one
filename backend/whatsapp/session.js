@@ -11,7 +11,8 @@ const NodeCache = require('node-cache');
 const { useFirestoreAuthState } = require('./firestoreAuthState');
 const { handleIncomingMessage } = require('./messageHandler');
 
-const DEFAULT_SESSION_ID = 'superkey-session-v2';
+// AB ISKO KABHI CHANGE MAT KARNA - Yeh permanent ho gaya!
+const DEFAULT_SESSION_ID = 'basekey-main'; 
 
 const state = {
   sock: null,
@@ -61,7 +62,7 @@ async function startSession(opts = {}) {
   const sock = makeWASocket({
     version,
     logger,
-    printQRInTerminal: true, // MASTERSTROKE: Ab QR code render ke terminal me bhi dikhega!
+    printQRInTerminal: true,
     auth: {
       creds: authState.creds,
       keys: makeCacheableSignalKeyStore(authState.keys, logger),
@@ -77,7 +78,7 @@ async function startSession(opts = {}) {
   state.status = 'connecting';
   state.lastError = null;
 
-  // Pairing Code Logic (With fix)
+  // Pairing Code Logic
   if (opts.phoneNumber && !authState.creds.registered) {
     console.log(`[Session Tracker] -> Pairing code request kar raha hai for ${opts.phoneNumber}...`);
     // Thoda delay diya hai taaki socket pehle properly connect ho jaye
@@ -125,8 +126,24 @@ async function startSession(opts = {}) {
         console.log('⚠️ [whatsapp] connection closed, reconnecting...', statusCode);
         setTimeout(() => startSession(opts).catch(console.error), 3000);
       } else {
-        console.log('❌ [whatsapp] logged out - user must relink device');
+        // YAHAN HAI ASLI PERMANENT FIX 🔥
+        console.log('🚨 [whatsapp] LOGGED OUT (401 Error) - User must relink device');
+        console.log('🧹 [System] -> Auto-deleting old corrupted session from Firebase...');
+        
         state.sock = null;
+        state.qrDataUrl = null;
+        state.pairingCode = null;
+
+        try {
+          const { clearSession } = await useFirestoreAuthState(DEFAULT_SESSION_ID);
+          await clearSession();
+          console.log('✅ [System] -> Purana kachra saaf! Fresh start lene ko taiyar hai.');
+          
+          // Kachra saaf karne ke baad engine ko turant fresh start do
+          startSession(opts).catch(console.error);
+        } catch (err) {
+          console.error('❌ [System] -> Kachra saaf karne me error aayi:', err);
+        }
       }
     }
   });
