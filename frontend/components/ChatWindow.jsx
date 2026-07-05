@@ -59,6 +59,10 @@ export default function ChatWindow({ jid }) {
         ...prev,
         { id: `tmp_${Date.now()}`, direction: 'out', text, timestamp: Date.now() },
       ]);
+      // Naya message bhejne ke baad automatically scroll down karna
+      requestAnimationFrame(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      });
     } finally {
       setSending(false);
     }
@@ -82,20 +86,28 @@ export default function ChatWindow({ jid }) {
       </div>
 
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto thin-scroll px-4 py-3 space-y-1.5">
-        {messages.map((m) => (
-          <div key={m.id} className={`bubble ${m.direction === 'out' ? 'bubble-out' : 'bubble-in'}`}>
-            {m.mediaUrl && m.mediaType?.includes('image') && (
-              <img src={m.mediaUrl} alt="" className="rounded-lg mb-1 max-w-full" />
-            )}
-            {m.mediaUrl && m.mediaType?.includes('video') && (
-              <video src={m.mediaUrl} controls className="rounded-lg mb-1 max-w-full" />
-            )}
-            {m.text && <span>{m.text}</span>}
-            <span className="bubble-meta">
-              {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </div>
-        ))}
+        {messages.map((m) => {
+          // YAHAN HAI ASLI FIX: Baileys aur Firebase ke saare formats ko handle karna
+          const msgText = m.text || m.body || m.content || m.message?.conversation || m.message?.extendedTextMessage?.text || (typeof m.message === 'string' ? m.message : null);
+          
+          // Timestamp ko format karne ka safe tarika (agar Firebase Timestamp object aa jaye toh crash na ho)
+          const timeMs = m.timestamp?._seconds ? m.timestamp._seconds * 1000 : (typeof m.timestamp === 'string' ? new Date(m.timestamp).getTime() : m.timestamp);
+          
+          return (
+            <div key={m.id} className={`bubble ${m.direction === 'out' ? 'bubble-out' : 'bubble-in'}`}>
+              {m.mediaUrl && m.mediaType?.includes('image') && (
+                <img src={m.mediaUrl} alt="" className="rounded-lg mb-1 max-w-full" />
+              )}
+              {m.mediaUrl && m.mediaType?.includes('video') && (
+                <video src={m.mediaUrl} controls className="rounded-lg mb-1 max-w-full" />
+              )}
+              {msgText && <span>{msgText}</span>}
+              <span className="bubble-meta">
+                {timeMs ? new Date(timeMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       <div className="px-4 py-3 bg-white border-t border-wa-divider flex items-center gap-2">
