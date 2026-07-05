@@ -11,7 +11,7 @@ const NodeCache = require('node-cache');
 const { useFirestoreAuthState } = require('./firestoreAuthState');
 const { handleIncomingMessage } = require('./messageHandler');
 
-const DEFAULT_SESSION_ID = 'primary'; 
+const DEFAULT_SESSION_ID = 'superkey-session-v2';
 
 const state = {
   sock: null,
