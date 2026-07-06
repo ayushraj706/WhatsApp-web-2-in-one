@@ -5,6 +5,10 @@ import { api } from '@/lib/api';
 // SMART HELPER: 12-digit number ko clean +91 format me badalne ke liye
 function formatPhoneNumber(num) {
   if (!num) return '';
+  // Agar LID aayi hai toh safai se handle karo
+  if (num.includes('lid')) {
+    return 'Official Account';
+  }
   if (num.startsWith('91') && num.length === 12) {
     return `+91 ${num.slice(2, 7)} ${num.slice(7)}`;
   }
@@ -13,20 +17,26 @@ function formatPhoneNumber(num) {
 
 // SMART HELPER: Naam ya Number nikalne ke liye
 function getDisplayName(chat) {
-  // Agar backend se asli naam aaya hai
-  if (chat.pushName && chat.pushName !== 'User') {
-    // FIX: Agar kisi ne apna naam sirf '.' (dot) rakha hai (jaise RBI), toh number dikhao
-    if (chat.pushName.trim() === '.') {
-      return formatPhoneNumber(chat.jid.split('@')[0]);
-    }
+  // Agar backend se asli naam aaya hai aur wo valid hai
+  if (chat.pushName && chat.pushName !== 'User' && chat.pushName.trim() !== '' && chat.pushName.trim() !== '.') {
     return chat.pushName;
   }
+  // Agar LID aayi hai, backend agar naam nahi laya toh ye fallback karega
+  const rawId = chat.jid.split('@')[0];
+  if (chat.jid.includes('@lid')) {
+     return 'Official Business';
+  }
   // Warna clean formatted number return karo
-  return formatPhoneNumber(chat.jid.split('@')[0]);
+  return formatPhoneNumber(rawId);
 }
 
 // SMART HELPER: Avatar ke initials nikalne ke liye
 function getInitials(displayName) {
+  if (!displayName) return '??';
+  
+  if (displayName === 'Official Business' || displayName === 'Official Account') {
+      return 'OA';
+  }
   if (displayName.startsWith('+')) {
     return displayName.slice(-2);
   }
@@ -62,8 +72,12 @@ export default function ChatList({ activeJid, onSelectChat }) {
       const res = await api.getChats(isInitial ? null : cursor);
       setChats((prev) => {
         const newChats = isInitial ? res.chats : [...prev, ...res.chats];
-        const uniqueChats = Array.from(new Map(newChats.map(c => [c.jid, c])).values());
-        return uniqueChats.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+        // Merge with existing, keeping the LATEST version of the chat object (for DP updates)
+        const chatMap = new Map();
+        prev.forEach(c => chatMap.set(c.jid, c)); // purane daalo
+        res.chats.forEach(c => chatMap.set(c.jid, c)); // naye wale override kar denge (with DP if fetched)
+        
+        return Array.from(chatMap.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
       });
       setCursor(res.nextCursor);
       setHasMore(res.hasMore);
@@ -80,20 +94,26 @@ export default function ChatList({ activeJid, onSelectChat }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🔥 LIVE SYNC MAGIC: Har 4 second me silent background check
+  // 🔥 LIVE SYNC MAGIC: Har 3 second me silent background check
   useEffect(() => {
     pollingRef.current = setInterval(async () => {
       try {
         const res = await api.getChats(null); 
         if (res.chats) {
           setChats((prev) => {
-            const combined = [...res.chats, ...prev];
-            const uniqueChats = Array.from(new Map(combined.map(c => [c.jid, c])).values());
-            return uniqueChats.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+            const chatMap = new Map();
+            prev.forEach(c => chatMap.set(c.jid, c));
+            // Hamesha naya object save karo taaki PushName ya DP update ho jaye
+            res.chats.forEach(c => {
+               if(!chatMap.has(c.jid) || chatMap.get(c.jid).lastMessageAt <= c.lastMessageAt){
+                   chatMap.set(c.jid, c);
+               }
+            });
+            return Array.from(chatMap.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
           });
         }
       } catch (err) {}
-    }, 4000);
+    }, 3000); // 3 seconds for snappier updates
     return () => clearInterval(pollingRef.current);
   }, []);
 
@@ -117,7 +137,6 @@ export default function ChatList({ activeJid, onSelectChat }) {
       <div className="bg-[#F6F6F6] pb-2 border-b border-[#E5E5EA] z-10 sticky top-0">
         <div className="flex justify-center items-center px-4 pt-8 pb-1 relative">
           <h1 className="text-[32px] font-bold text-black tracking-tight leading-none w-full text-left">Chats</h1>
-          {/* Edit button yahan se hamesha ke liye hata diya gaya hai */}
         </div>
         
         {/* iOS Style Search Bar */}
@@ -162,7 +181,12 @@ export default function ChatList({ activeJid, onSelectChat }) {
               <div className="py-2.5 pl-4 pr-3 shrink-0">
                 <div className="w-[52px] h-[52px] rounded-full overflow-hidden bg-gradient-to-tr from-[#94a3b8] to-[#cbd5e1] text-white flex items-center justify-center font-medium shadow-sm text-[20px]">
                   {chat.profilePicUrl ? (
-                    <img src={chat.profilePicUrl} alt="DP" className="w-full h-full object-cover" />
+                    <img 
+                       src={chat.profilePicUrl} 
+                       alt="DP" 
+                       className="w-full h-full object-cover" 
+                       onError={(e) => { e.target.style.display = 'none'; }} // Fallback if image fails to load
+                    />
                   ) : (
                     initials
                   )}
