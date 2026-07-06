@@ -2,41 +2,39 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
 
-// SMART HELPER: 12-digit number ko clean +91 format me badalne ke liye
-function formatPhoneNumber(num) {
-  if (!num) return '';
-  // Agar LID aayi hai toh safai se handle karo
-  if (num.includes('lid')) {
-    return 'Official Account';
+// SMART HELPER: raw id (digits) ko clean +91 format me badalne ke liye.
+// Kaam karta hai chahe id @s.whatsapp.net se aayi ho ya @lid se — dono
+// cases me hum sirf suffix strip karke number ko format karte hain,
+// koi bhi cheez hardcode nahi karte.
+function formatPhoneNumber(rawId) {
+  if (!rawId) return '';
+  const digits = rawId.replace(/[^0-9]/g, '');
+  if (!digits) return rawId; // agar digits hi nahi hain, jo mila wahi dikha do
+  if (digits.startsWith('91') && digits.length === 12) {
+    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
   }
-  if (num.startsWith('91') && num.length === 12) {
-    return `+91 ${num.slice(2, 7)} ${num.slice(7)}`;
-  }
-  return '+' + num;
+  return '+' + digits;
 }
 
 // SMART HELPER: Naam ya Number nikalne ke liye
+// Rule: hamesha pushName dikhao agar wo valid hai.
+// Agar pushName missing/'.'/undefined hai, toh real formatted number par
+// fallback karo (chahe jid @s.whatsapp.net ho ya @lid) — kabhi bhi
+// "Official Business" jaisi hardcoded value nahi dikhani.
 function getDisplayName(chat) {
-  // Agar backend se asli naam aaya hai aur wo valid hai
-  if (chat.pushName && chat.pushName !== 'User' && chat.pushName.trim() !== '' && chat.pushName.trim() !== '.') {
-    return chat.pushName;
+  const pushName = chat.pushName?.trim();
+  const isValidPushName = pushName && pushName !== 'User' && pushName !== '.' && pushName !== '';
+  if (isValidPushName) {
+    return pushName;
   }
-  // Agar LID aayi hai, backend agar naam nahi laya toh ye fallback karega
   const rawId = chat.jid.split('@')[0];
-  if (chat.jid.includes('@lid')) {
-     return 'Official Business';
-  }
-  // Warna clean formatted number return karo
   return formatPhoneNumber(rawId);
 }
 
 // SMART HELPER: Avatar ke initials nikalne ke liye
 function getInitials(displayName) {
   if (!displayName) return '??';
-  
-  if (displayName === 'Official Business' || displayName === 'Official Account') {
-      return 'OA';
-  }
+
   if (displayName.startsWith('+')) {
     return displayName.slice(-2);
   }
@@ -51,6 +49,18 @@ function formatTime(ts) {
   if (!ts) return '';
   const d = new Date(ts);
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+// SAFE SORT: lastMessageAt kabhi kabhi Firestore Timestamp object ya string
+// bhi ban sakta hai. Number() se coerce karke sort karo taaki NaN ki wajah
+// se order kabhi na tootey.
+function toMillis(ts) {
+  if (!ts) return 0;
+  if (typeof ts === 'object' && ts._seconds) return ts._seconds * 1000;
+  return Number(ts) || 0;
+}
+function sortByRecent(list) {
+  return [...list].sort((a, b) => toMillis(b.lastMessageAt) - toMillis(a.lastMessageAt));
 }
 
 export default function ChatList({ activeJid, onSelectChat }) {
@@ -77,7 +87,7 @@ export default function ChatList({ activeJid, onSelectChat }) {
         prev.forEach(c => chatMap.set(c.jid, c)); // purane daalo
         res.chats.forEach(c => chatMap.set(c.jid, c)); // naye wale override kar denge (with DP if fetched)
         
-        return Array.from(chatMap.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+        return sortByRecent(Array.from(chatMap.values()));
       });
       setCursor(res.nextCursor);
       setHasMore(res.hasMore);
@@ -105,16 +115,39 @@ export default function ChatList({ activeJid, onSelectChat }) {
             prev.forEach(c => chatMap.set(c.jid, c));
             // Hamesha naya object save karo taaki PushName ya DP update ho jaye
             res.chats.forEach(c => {
-               if(!chatMap.has(c.jid) || chatMap.get(c.jid).lastMessageAt <= c.lastMessageAt){
+               if(!chatMap.has(c.jid) || toMillis(chatMap.get(c.jid).lastMessageAt) <= toMillis(c.lastMessageAt)){
                    chatMap.set(c.jid, c);
                }
             });
-            return Array.from(chatMap.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+            return sortByRecent(Array.from(chatMap.values()));
           });
         }
       } catch (err) {}
     }, 3000); // 3 seconds for snappier updates
     return () => clearInterval(pollingRef.current);
+  }, []);
+
+  // ⚡ INSTANT REORDER: jab CRM se koi message bhejte ho, ChatWindow ye
+  // event fire karta hai. Isse hume 3s poll ka wait nahi karna padta —
+  // chat turant top par chali jaati hai.
+  useEffect(() => {
+    function onChatActivity(e) {
+      const { jid, lastMessage, lastMessageAt } = e.detail || {};
+      if (!jid) return;
+      setChats((prev) => {
+        const idx = prev.findIndex((c) => c.jid === jid);
+        if (idx === -1) return prev; // chat list me nahi hai toh kuch mat karo
+        const updated = {
+          ...prev[idx],
+          lastMessage: lastMessage ?? prev[idx].lastMessage,
+          lastMessageAt: lastMessageAt ?? Date.now(),
+        };
+        const rest = prev.filter((c) => c.jid !== jid);
+        return sortByRecent([updated, ...rest]);
+      });
+    }
+    window.addEventListener('basekey:chat-activity', onChatActivity);
+    return () => window.removeEventListener('basekey:chat-activity', onChatActivity);
   }, []);
 
   function onScroll(e) {
