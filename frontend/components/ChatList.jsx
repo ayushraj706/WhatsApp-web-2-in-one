@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
 
 // SMART HELPER: 12-digit number ko clean +91 format me badalne ke liye
@@ -47,33 +47,59 @@ export default function ChatList({ activeJid, onSelectChat }) {
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const pollingRef = useRef(null);
 
-  const loadMore = useCallback(async () => {
-    if (loading || !hasMore) return;
-    setLoading(true);
+  // Load Chats (Infinite Scroll ke liye)
+  const loadMore = useCallback(async (isInitial = false) => {
+    if (loading || (!hasMore && !isInitial)) return;
+    if (isInitial) setLoading(true);
     try {
-      const res = await api.getChats(cursor);
+      const res = await api.getChats(isInitial ? null : cursor);
       setChats((prev) => {
-        const existingJids = new Set(prev.map(c => c.jid));
-        const newChats = res.chats.filter(c => !existingJids.has(c.jid));
-        return [...prev, ...newChats];
+        const newChats = isInitial ? res.chats : [...prev, ...res.chats];
+        // Duplicate hatana
+        const uniqueChats = Array.from(new Map(newChats.map(c => [c.jid, c])).values());
+        // Sorting: Sabse naya message hamesha upar
+        return uniqueChats.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
       });
       setCursor(res.nextCursor);
       setHasMore(res.hasMore);
     } catch (err) {
       console.error('Failed to load chats:', err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   }, [cursor, hasMore, loading]);
 
+  // Initial Load
   useEffect(() => {
-    loadMore();
-  }, [loadMore]);
+    loadMore(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🔥 LIVE SYNC MAGIC: Har 4 second me silent background check
+  useEffect(() => {
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await api.getChats(null); // Fetch latest chats
+        if (res.chats) {
+          setChats((prev) => {
+            const combined = [...res.chats, ...prev];
+            const uniqueChats = Array.from(new Map(combined.map(c => [c.jid, c])).values());
+            // Har baar update hone par naye messages ko top par sort karo
+            return uniqueChats.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+          });
+        }
+      } catch (err) {
+        // Silent fail taaki UI kharab na ho
+      }
+    }, 4000);
+    return () => clearInterval(pollingRef.current);
+  }, []);
 
   function onScroll(e) {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
-    if (scrollHeight - scrollTop - clientHeight < 80) loadMore();
+    if (scrollHeight - scrollTop - clientHeight < 80) loadMore(false);
   }
 
   return (
@@ -118,7 +144,7 @@ export default function ChatList({ activeJid, onSelectChat }) {
                 activeJid === chat.jid ? 'bg-[#E5E5EA]' : 'bg-white hover:bg-[#F2F2F7]'
               }`}
             >
-              {/* iOS Avatar (Pura left aligned, bina border ke) */}
+              {/* iOS Avatar */}
               <div className="py-2.5 pl-4 pr-3 shrink-0">
                 <div className="w-[52px] h-[52px] rounded-full overflow-hidden bg-gradient-to-tr from-[#94a3b8] to-[#cbd5e1] text-white flex items-center justify-center font-medium shadow-sm text-[20px]">
                   {chat.profilePicUrl ? (
