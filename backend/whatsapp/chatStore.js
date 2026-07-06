@@ -5,7 +5,7 @@ const { uploadToCloudinary } = require('../config/cloudinary');
 const MEDIA_TYPE_MAP = {
   imageMessage: 'image',
   videoMessage: 'video',
-  audioMessage: 'video',
+  audioMessage: 'video', // Cloudinary handles audio files under the video resource type
   documentMessage: 'raw',
   stickerMessage: 'image',
 };
@@ -30,8 +30,7 @@ function getMediaType(message) {
  * deleted or overwritten wholesale - this keeps memory flat regardless
  * of how large history grows, and satisfies the "never delete" requirement.
  */
-// YAHAN CHANGE HAI: Naye arguments (profilePicUrl, pushName) add kiye
-async function saveMessage(jid, msg, direction, profilePicUrl = null, pushName = null) {
+async function saveMessage(jid, msg, direction, profilePicUrl = undefined, pushName = null) {
   const chatRef = db.collection('chats').doc(jid);
   const msgId = msg.key.id;
   const messageType = getMediaType(msg.message);
@@ -76,8 +75,8 @@ async function saveMessage(jid, msg, direction, profilePicUrl = null, pushName =
     updateData.pushName = pushName;
   }
 
-  // Naya Data: Agar user ki DP available hai, toh use save karo
-  if (profilePicUrl) {
+  // Naya Data: Agar DP available hai ya explicitly null pass ki gayi hai
+  if (profilePicUrl !== undefined) {
     updateData.profilePicUrl = profilePicUrl;
   }
 
@@ -92,9 +91,7 @@ async function isFirstTimeContact(jid) {
 
 /**
  * Saves a status/story update (from status@broadcast) under
- * statuses/{posterJid}/items/{messageId}, with a 24h expiresAt so the
- * status viewer UI can filter out anything WhatsApp itself would no
- * longer show, without us ever deleting the underlying document.
+ * statuses/{posterJid}/items/{messageId}, with a 24h expiresAt.
  */
 async function saveStatus(msg) {
   const posterJid = msg.key.participant || msg.key.remoteJid;
