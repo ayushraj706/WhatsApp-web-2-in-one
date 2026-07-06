@@ -2,6 +2,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 
+// SMART HELPER: 12-digit number ko clean +91 format me badalne ke liye
+function formatPhoneNumber(num) {
+  if (!num) return '';
+  if (num.startsWith('91') && num.length === 12) {
+    return `+91 ${num.slice(2, 7)} ${num.slice(7)}`;
+  }
+  return '+' + num;
+}
+
 export default function ChatWindow({ jid }) {
   const [messages, setMessages] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -104,25 +113,30 @@ export default function ChatWindow({ jid }) {
 
   if (!jid) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#EFEAE2] text-gray-500">
-        <svg viewBox="0 0 100 100" width="150" height="150" className="mb-4 opacity-50">
-           <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="2"/>
-           <path d="M50 30 v40 M30 50 h40" stroke="currentColor" strokeWidth="2"/>
+      <div className="flex-1 flex flex-col items-center justify-center bg-[#F2F2F7] text-gray-500">
+        <svg viewBox="0 0 100 100" width="100" height="100" className="mb-4 text-[#C6C6C8]">
+           <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="3"/>
+           <path d="M50 30 v40 M30 50 h40" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
         </svg>
-        <p className="text-lg font-medium">WhatsApp Business Web</p>
-        <p className="text-sm mt-2">Kripya koi chat select karein...</p>
+        <p className="text-[17px] font-medium text-[#8E8E93]">WhatsApp Business</p>
       </div>
     );
   }
 
   const hasText = draft.trim().length > 0;
 
+  // DYNAMIC NAME EXTRACTION (Backend se pushName nikalna list messages se)
+  const incomingMsgWithName = messages.find(m => m.direction === 'in' && m.pushName && m.pushName !== 'User');
+  const rawNumber = jid.split('@')[0];
+  const displayName = incomingMsgWithName ? incomingMsgWithName.pushName : formatPhoneNumber(rawNumber);
+  const initials = displayName.startsWith('+') ? displayName.slice(-2) : displayName.substring(0, 2).toUpperCase();
+
   return (
     <div className="flex-1 flex flex-col bg-[#EFEAE2] h-full overflow-hidden relative" style={{ backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")', backgroundSize: 'contain', backgroundRepeat: 'repeat' }}>
       
       {/* FULL SCREEN MEDIA PREVIEW OVERLAY */}
       {previewMedia && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center backdrop-blur-sm transition-opacity duration-300">
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center backdrop-blur-md transition-opacity duration-300">
           <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
             <span className="text-white font-medium">Media Preview</span>
             <button 
@@ -145,16 +159,37 @@ export default function ChatWindow({ jid }) {
         </div>
       )}
 
-      {/* HEADER */}
-      <div className="px-4 py-3 bg-[#F0F2F5] border-b border-gray-300 flex items-center justify-between z-10 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center text-lg font-semibold shadow">
-            {jid.split('@')[0].slice(-2)}
+      {/* iOS STYLE HEADER */}
+      <div className="px-3 py-2.5 bg-[#F6F6F6]/95 backdrop-blur-md border-b border-[#C6C6C8]/60 flex items-center justify-between z-10 sticky top-0 shadow-sm">
+        <div className="flex items-center gap-2 overflow-hidden">
+          {/* iOS Back Button (Visual) */}
+          <button className="text-[#007AFF] flex items-center gap-1 -ml-1 pr-1 hover:opacity-70 transition-opacity">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+            <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-tr from-[#94a3b8] to-[#cbd5e1] text-white flex items-center justify-center font-medium shrink-0 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+              {initials}
+            </div>
+          </button>
+          
+          <div className="flex flex-col min-w-0 pr-2">
+            <span className="font-semibold text-black text-[16px] truncate tracking-tight">{displayName}</span>
+            <span className="text-[12px] text-[#8E8E93] truncate">tap here for contact info</span>
           </div>
-          <div>
-            <span className="font-semibold text-gray-800 block text-lg">{jid.split('@')[0]}</span>
-            <span className="text-xs text-green-600 block">Online (Bot Active)</span>
-          </div>
+        </div>
+        
+        {/* iOS Header Icons */}
+        <div className="flex items-center gap-4 text-[#007AFF] px-2 shrink-0">
+          <button className="hover:opacity-70 transition-opacity">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15.6 11.6L22 7v10l-6.4-4.6v-1zM2 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/>
+            </svg>
+          </button>
+          <button className="hover:opacity-70 transition-opacity">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -162,7 +197,7 @@ export default function ChatWindow({ jid }) {
       <div 
         ref={scrollContainerRef} 
         onScroll={onScroll} 
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-2 flex flex-col relative"
+        className="flex-1 overflow-y-auto px-3 py-4 space-y-2 flex flex-col relative"
       >
         {messages.map((m) => {
           let msgText = m.text || m.body || m.content || m.message?.conversation || m.message?.extendedTextMessage?.text;
@@ -181,25 +216,25 @@ export default function ChatWindow({ jid }) {
           return (
             <div key={m.id} className={`flex w-full ${isOut ? 'justify-end' : 'justify-start'}`}>
               <div 
-                className={`max-w-[85%] md:max-w-[65%] rounded-2xl px-3 py-2 text-[15px] shadow-[0_1px_1px_rgba(0,0,0,0.1)] relative flex flex-col ${
-                  isOut ? 'bg-[#D9FDD3] rounded-tr-sm' : 'bg-white rounded-tl-sm'
+                className={`max-w-[80%] md:max-w-[65%] rounded-[18px] px-3.5 py-2 text-[16px] leading-[22px] shadow-sm relative flex flex-col ${
+                  isOut ? 'bg-[#DCF7C5] rounded-br-[4px]' : 'bg-white rounded-bl-[4px] border border-[#E5E5EA]'
                 }`}
               >
                 {/* Media Render (Clickable for preview) */}
                 {(isImage || isVideo) && (
                   <div 
-                    className="relative cursor-pointer mb-2 overflow-hidden rounded-lg group"
+                    className="relative cursor-pointer mb-1.5 mt-0.5 overflow-hidden rounded-[14px] group"
                     onClick={() => handleMediaClick(m.mediaUrl, isImage ? 'image' : 'video')}
                   >
                     {isImage && (
-                      <img src={m.mediaUrl} alt="media" className="w-full max-h-[250px] object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" />
+                      <img src={m.mediaUrl} alt="media" className="w-full max-h-[280px] object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" />
                     )}
                     {isVideo && (
                       <div className="relative">
-                         <video src={m.mediaUrl} className="w-full max-h-[250px] object-cover" />
-                         <div className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-lg">
-                           <div className="w-12 h-12 bg-white/80 rounded-full flex items-center justify-center backdrop-blur-sm">
-                             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="text-gray-800 ml-1">
+                         <video src={m.mediaUrl} className="w-full max-h-[280px] object-cover" />
+                         <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-[14px]">
+                           <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center backdrop-blur-sm shadow-md">
+                             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-gray-900 ml-1">
                                <path d="M5 3l14 9-14 9V3z" />
                              </svg>
                            </div>
@@ -209,17 +244,17 @@ export default function ChatWindow({ jid }) {
                   </div>
                 )}
                 {isAudio && (
-                  <audio src={m.mediaUrl} controls className="mb-2 w-[240px] h-[40px] outline-none" />
+                  <audio src={m.mediaUrl} controls className="mb-2 w-[220px] h-[36px] outline-none" />
                 )}
                 
                 {/* Text Render */}
-                {msgText && <span className="text-gray-800 break-words leading-relaxed" style={{ whiteSpace: 'pre-wrap' }}>{msgText}</span>}
+                {msgText && <span className="text-black break-words" style={{ whiteSpace: 'pre-wrap' }}>{msgText}</span>}
                 
-                {/* Timestamp */}
-                <div className={`text-[11px] text-gray-500 flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
-                  {timeMs ? new Date(timeMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                {/* Timestamp & Read Receipt */}
+                <div className={`text-[11px] text-[#8E8E93] flex items-center gap-1 mt-0.5 ${isOut ? 'justify-end' : 'justify-start'}`}>
+                  {timeMs ? new Date(timeMs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
                   {isOut && (
-                    <svg viewBox="0 0 16 15" width="16" height="15" fill="currentColor" className="text-[#53bdeb]">
+                    <svg viewBox="0 0 16 15" width="15" height="14" fill="currentColor" className="text-[#34B7F1] ml-0.5">
                       <path d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.32.32 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.484-.033l6.272-8.048a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.879a.32.32 0 0 1-.484.033L1.891 7.769a.366.366 0 0 0-.515.006l-.423.433a.364.364 0 0 0 .006.514l3.258 3.185c.143.14.361.125.484-.033l6.272-8.048a.365.365 0 0 0-.063-.51z" />
                     </svg>
                   )}
@@ -228,27 +263,28 @@ export default function ChatWindow({ jid }) {
             </div>
           );
         })}
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} className="h-1" />
       </div>
 
       {/* iOS STYLE SMART INPUT AREA */}
-      <div className="px-3 py-2 bg-[#F6F6F6] border-t border-gray-300 flex items-end gap-3 pb-safe z-10">
+      <div className="px-3 py-2 bg-[#F6F6F6] border-t border-[#C6C6C8]/60 flex items-end gap-2.5 pb-safe z-10 backdrop-blur-md">
+        
+        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
         
         {/* iOS + Attachment Button */}
-        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
         <button 
           onClick={() => fileInputRef.current.click()}
-          className="mb-[7px] text-[#007AFF] hover:bg-gray-200 rounded-full p-1 transition duration-200 flex-shrink-0"
+          className="mb-[5px] text-[#007AFF] hover:opacity-70 transition-opacity flex-shrink-0"
           title="Attach Media"
         >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
         </button>
 
         {/* Text Input (Rounded Pill shape) */}
-        <div className="flex-1 bg-white border border-[#D1D1D6] rounded-3xl flex items-end min-h-[36px] mb-[3px] shadow-sm overflow-hidden">
+        <div className="flex-1 bg-white border border-[#D1D1D6] rounded-[20px] flex items-end min-h-[38px] mb-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -259,14 +295,14 @@ export default function ChatWindow({ jid }) {
               }
             }}
             placeholder="Message"
-            className="w-full max-h-[120px] min-h-[36px] bg-transparent border-none px-4 py-2 outline-none resize-none overflow-y-auto thin-scroll text-[16px] leading-tight"
+            className="w-full max-h-[120px] min-h-[38px] bg-transparent border-none pl-4 pr-2 py-2 outline-none resize-none overflow-y-auto thin-scroll text-[16px] leading-[20px] placeholder-[#8E8E93]"
             rows="1"
           />
           
-          {/* Document icon inside input (iOS style) - visible only if empty */}
+          {/* Sticker icon inside input (iOS style) - visible only if empty */}
           {!hasText && (
-             <button className="p-2 mr-1 text-gray-400 hover:text-gray-600 transition" onClick={() => fileInputRef.current.click()}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+             <button className="p-2 mr-0.5 text-[#8E8E93] hover:text-gray-600 transition" onClick={() => fileInputRef.current.click()}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
                 </svg>
@@ -274,11 +310,11 @@ export default function ChatWindow({ jid }) {
           )}
         </div>
         
-        {/* Smart Right Button (Send if text exists, Camera/Mic if empty) */}
-        <div className="mb-[5px] flex-shrink-0 flex items-center gap-2">
+        {/* Smart Right Button */}
+        <div className="mb-[4px] flex-shrink-0 flex items-center gap-3">
           {sending ? (
-             <div className="w-8 h-8 rounded-full bg-[#007AFF] flex items-center justify-center">
-                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
+             <div className="w-8 h-8 flex items-center justify-center">
+                <svg className="animate-spin h-5 w-5 text-[#007AFF]" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>
@@ -286,22 +322,22 @@ export default function ChatWindow({ jid }) {
           ) : hasText ? (
             <button
               onClick={handleSend}
-              className="w-8 h-8 rounded-full bg-[#007AFF] text-white flex items-center justify-center hover:bg-blue-600 transition transform active:scale-95 shadow-sm"
+              className="w-[34px] h-[34px] rounded-full bg-[#007AFF] text-white flex items-center justify-center hover:bg-blue-600 transition transform active:scale-95 shadow-sm"
             >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" className="ml-0.5 mt-0.5">
-                <path d="M3 20V14L11 12L3 10V4L22 12L3 20Z"></path>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" className="ml-[2px] mt-[1px]">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
               </svg>
             </button>
           ) : (
             <>
-              <button className="text-[#007AFF] p-1.5 hover:bg-gray-200 rounded-full transition" title="Camera">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <button className="text-[#007AFF] pb-[2px] hover:opacity-70 transition" title="Camera">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
                   <circle cx="12" cy="13" r="4"></circle>
                 </svg>
               </button>
-              <button className="text-[#007AFF] p-1.5 hover:bg-gray-200 rounded-full transition" title="Microphone">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <button className="text-[#007AFF] pb-[2px] pr-1 hover:opacity-70 transition" title="Microphone">
+                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                    <line x1="12" y1="19" x2="12" y2="23"></line>
