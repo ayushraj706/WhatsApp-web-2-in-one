@@ -1,6 +1,6 @@
 /**
  * A drop-in replacement for Baileys' useMultiFileAuthState, backed by Firestore.
- * UPDATED: Includes auto-cleanup logic to prevent session corruption.
+ * FIXED: Dynamic creds update and robust cleanup logic.
  */
 const { db } = require('../config/firebase');
 const { initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
@@ -25,23 +25,18 @@ async function useFirestoreAuthState(sessionId) {
     await keysCol.doc(key).delete().catch(() => {});
   }
 
-  // --- AUTO CLEANUP LOGIC ---
-  // Agar creds (encryption keys) database mein hain, toh unhe read karo, 
-  // warna fresh init karo.
+  // --- ROBUST AUTH LOAD ---
   let creds = await readData('creds');
-  
   if (!creds) {
-    console.log('[Auth] No existing session found, initializing fresh session...');
-    // Fresh session ke liye purana session ka kachra saaf kar do
-    await sessionRef.collection('keys').get().then(snap => {
-       const batch = db.batch();
-       snap.docs.forEach(doc => batch.delete(doc.ref));
-       return batch.commit();
-    }).catch(err => console.error('[Auth] Cleanup failed:', err));
-    
+    console.log('[Auth] Initializing fresh session...');
+    // Cleanup existing keys if initialization happens
+    const snap = await keysCol.get();
+    if (!snap.empty) {
+      const batch = db.batch();
+      snap.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
     creds = initAuthCreds();
-  } else {
-    console.log('[Auth] Existing session loaded.');
   }
 
   return {
@@ -75,12 +70,8 @@ async function useFirestoreAuthState(sessionId) {
       },
     },
     saveCreds: async () => {
+      // DYNAMIC UPDATE: Har baar saveCreds call hone par updated creds likho
       await writeData('creds', creds);
-    },
-    clearSession: async () => {
-      const snap = await keysCol.get();
-      const batchDeletes = snap.docs.map((d) => d.ref.delete());
-      await Promise.all(batchDeletes);
     },
   };
 }
