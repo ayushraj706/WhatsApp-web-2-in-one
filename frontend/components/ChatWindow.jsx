@@ -11,6 +11,9 @@ function formatPhoneNumber(num) {
   return '+' + num;
 }
 
+// iOS style quick-pick emoji strip (koi heavy library nahi, halka aur fast)
+const QUICK_EMOJIS = ['😀','😂','😍','👍','🙏','❤️','😢','😮','🔥','🎉','😅','🤔','👏','😎','🥳','😴'];
+
 // NAYA PROP: onBack add kiya gaya hai taaki back button sach me kaam kare
 export default function ChatWindow({ jid, onBack }) {
   const [messages, setMessages] = useState([]);
@@ -21,11 +24,33 @@ export default function ChatWindow({ jid, onBack }) {
   
   // Media Preview State
   const [previewMedia, setPreviewMedia] = useState(null);
+
+  // Emoji Picker State (iOS jaisa in-input emoji icon)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const textareaRef = useRef(null);
+  const emojiPickerRef = useRef(null);
   
   const scrollContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const pollingRef = useRef(null);
+
+  // Emoji picker ko bahar click karne par band karo
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    function handleClickOutside(e) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        setShowEmojiPicker(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showEmojiPicker]);
+
+  function insertEmoji(emoji) {
+    setDraft((prev) => prev + emoji);
+    textareaRef.current?.focus();
+  }
 
   // --- SCROLLING LOGIC ---
   const scrollToBottom = (behavior = "smooth") => {
@@ -112,10 +137,17 @@ export default function ChatWindow({ jid, onBack }) {
     setDraft(''); 
     try {
       await api.sendText(jid, text);
+      const sentAt = Date.now();
       setMessages((prev) => [
         ...prev,
-        { id: `tmp_${Date.now()}`, direction: 'out', text, timestamp: Date.now() },
+        { id: `tmp_${sentAt}`, direction: 'out', text, timestamp: sentAt },
       ]);
+      // ⚡ Isse ChatList ko turant pata chal jaata hai ki ye chat abhi
+      // active hui hai, aur wo 3s poll ka wait kiye bina hi ise top par
+      // le jaata hai.
+      window.dispatchEvent(new CustomEvent('basekey:chat-activity', {
+        detail: { jid, lastMessage: text, lastMessageAt: sentAt },
+      }));
     } catch (error) {
       console.error("Message send failed:", error);
       setDraft(text);
@@ -305,28 +337,56 @@ export default function ChatWindow({ jid, onBack }) {
         </button>
 
         {/* Text Input */}
-        <div className="flex-1 bg-white border border-[#D1D1D6] rounded-[20px] flex items-end min-h-[38px] mb-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Message"
-            className="w-full max-h-[120px] min-h-[38px] bg-transparent border-none pl-4 pr-2 py-2 outline-none resize-none overflow-y-auto thin-scroll text-[16px] leading-[20px] placeholder-[#8E8E93]"
-            rows="1"
-          />
-          
-          {!hasText && (
-             <button className="p-2 mr-0.5 text-[#8E8E93] hover:text-gray-600 transition" onClick={() => fileInputRef.current.click()}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                </svg>
-             </button>
+        <div className="relative flex-1">
+          <div className="bg-white border border-[#D1D1D6] rounded-[20px] flex items-end min-h-[38px] mb-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+            {/* iOS Emoji Icon — attachment icon ki jagah, hamesha visible (jaisa iOS WhatsApp me hota hai) */}
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker((v) => !v)}
+              className="p-2 pl-2.5 mb-[1px] text-[#8E8E93] hover:text-gray-600 transition flex-shrink-0"
+              title="Emoji"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                <line x1="15" y1="9" x2="15.01" y2="9"></line>
+              </svg>
+            </button>
+
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Message"
+              className="w-full max-h-[120px] min-h-[38px] bg-transparent border-none pl-1 pr-3 py-2 outline-none resize-none overflow-y-auto thin-scroll text-[16px] leading-[20px] placeholder-[#8E8E93]"
+              rows="1"
+            />
+          </div>
+
+          {/* Quick emoji popover */}
+          {showEmojiPicker && (
+            <div
+              ref={emojiPickerRef}
+              className="absolute bottom-[46px] left-0 bg-white/95 backdrop-blur-md border border-[#E5E5EA] rounded-2xl shadow-lg p-2 grid grid-cols-8 gap-1 w-[280px] z-20"
+            >
+              {QUICK_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => insertEmoji(emoji)}
+                  className="text-[20px] leading-none p-1 rounded-lg hover:bg-[#F2F2F7] transition active:scale-90"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           )}
         </div>
         
