@@ -90,6 +90,27 @@ async function isFirstTimeContact(jid) {
 }
 
 /**
+ * Single Firestore read that tells the caller:
+ *  - isFirstTime: is this a brand new chat doc?
+ *  - hasProfilePic: does the chat already have a profilePicUrl saved?
+ *
+ * messageHandler uses this (instead of a separate isFirstTimeContact() call)
+ * so we don't pay for two reads per incoming message, and so we only call
+ * sock.profilePictureUrl() when we actually need to (new contact, or a
+ * contact we've never managed to fetch a DP for) — this is what keeps DP
+ * fetching from happening on every single message and hammering the
+ * Render free-tier instance / hitting WhatsApp rate limits.
+ */
+async function getChatMeta(jid) {
+  const chatDoc = await db.collection('chats').doc(jid).get();
+  if (!chatDoc.exists) {
+    return { isFirstTime: true, hasProfilePic: false };
+  }
+  const data = chatDoc.data() || {};
+  return { isFirstTime: false, hasProfilePic: !!data.profilePicUrl };
+}
+
+/**
  * Saves a status/story update (from status@broadcast) under
  * statuses/{posterJid}/items/{messageId}, with a 24h expiresAt.
  */
@@ -131,4 +152,4 @@ async function saveStatus(msg) {
   await db.collection('statuses').doc(posterJid).set({ posterJid, lastStatusAt: timestamp }, { merge: true });
 }
 
-module.exports = { saveMessage, isFirstTimeContact, extractText, getMediaType, saveStatus };
+module.exports = { saveMessage, isFirstTimeContact, getChatMeta, extractText, getMediaType, saveStatus };
