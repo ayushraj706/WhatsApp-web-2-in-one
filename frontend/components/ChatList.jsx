@@ -5,7 +5,6 @@ import { api } from '@/lib/api';
 // SMART HELPER: 12-digit number ko clean +91 format me badalne ke liye
 function formatPhoneNumber(num) {
   if (!num) return '';
-  // Agar Indian number hai (91 se shuru aur 12 digit)
   if (num.startsWith('91') && num.length === 12) {
     return `+91 ${num.slice(2, 7)} ${num.slice(7)}`;
   }
@@ -14,8 +13,12 @@ function formatPhoneNumber(num) {
 
 // SMART HELPER: Naam ya Number nikalne ke liye
 function getDisplayName(chat) {
-  // Agar backend se asli naam (pushName) aaya hai aur wo 'User' nahi hai
+  // Agar backend se asli naam aaya hai
   if (chat.pushName && chat.pushName !== 'User') {
+    // FIX: Agar kisi ne apna naam sirf '.' (dot) rakha hai (jaise RBI), toh number dikhao
+    if (chat.pushName.trim() === '.') {
+      return formatPhoneNumber(chat.jid.split('@')[0]);
+    }
     return chat.pushName;
   }
   // Warna clean formatted number return karo
@@ -25,7 +28,6 @@ function getDisplayName(chat) {
 // SMART HELPER: Avatar ke initials nikalne ke liye
 function getInitials(displayName) {
   if (displayName.startsWith('+')) {
-    // Agar number hai, toh aakhri ke 2 digit (iOS style placeholder)
     return displayName.slice(-2);
   }
   const parts = displayName.trim().split(' ');
@@ -38,7 +40,6 @@ function getInitials(displayName) {
 function formatTime(ts) {
   if (!ts) return '';
   const d = new Date(ts);
-  // iOS Style Time (e.g., "10:30 AM")
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
@@ -47,6 +48,10 @@ export default function ChatList({ activeJid, onSelectChat }) {
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  
+  // SEARCH STATE
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const pollingRef = useRef(null);
 
   // Load Chats (Infinite Scroll ke liye)
@@ -57,9 +62,7 @@ export default function ChatList({ activeJid, onSelectChat }) {
       const res = await api.getChats(isInitial ? null : cursor);
       setChats((prev) => {
         const newChats = isInitial ? res.chats : [...prev, ...res.chats];
-        // Duplicate hatana
         const uniqueChats = Array.from(new Map(newChats.map(c => [c.jid, c])).values());
-        // Sorting: Sabse naya message hamesha upar
         return uniqueChats.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
       });
       setCursor(res.nextCursor);
@@ -81,18 +84,15 @@ export default function ChatList({ activeJid, onSelectChat }) {
   useEffect(() => {
     pollingRef.current = setInterval(async () => {
       try {
-        const res = await api.getChats(null); // Fetch latest chats
+        const res = await api.getChats(null); 
         if (res.chats) {
           setChats((prev) => {
             const combined = [...res.chats, ...prev];
             const uniqueChats = Array.from(new Map(combined.map(c => [c.jid, c])).values());
-            // Har baar update hone par naye messages ko top par sort karo
             return uniqueChats.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
           });
         }
-      } catch (err) {
-        // Silent fail taaki UI kharab na ho
-      }
+      } catch (err) {}
     }, 4000);
     return () => clearInterval(pollingRef.current);
   }, []);
@@ -102,16 +102,22 @@ export default function ChatList({ activeJid, onSelectChat }) {
     if (scrollHeight - scrollTop - clientHeight < 80) loadMore(false);
   }
 
+  // SEARCH FILTER LOGIC
+  const filteredChats = chats.filter((chat) => {
+    if (!searchQuery) return true;
+    const nameOrNumber = getDisplayName(chat).toLowerCase();
+    const query = searchQuery.toLowerCase();
+    return nameOrNumber.includes(query) || chat.jid.includes(query);
+  });
+
   return (
     <div className="h-full flex flex-col bg-white border-r border-[#E5E5EA] w-full max-w-sm shrink-0">
       
       {/* iOS Style Header */}
       <div className="bg-[#F6F6F6] pb-2 border-b border-[#E5E5EA] z-10 sticky top-0">
-        <div className="flex justify-between items-center px-4 pt-8 pb-1">
-          <h1 className="text-[32px] font-bold text-black tracking-tight leading-none">Chats</h1>
-          <button className="text-[#007AFF] text-[17px] font-medium hover:opacity-70 transition-opacity">
-            Edit
-          </button>
+        <div className="flex justify-center items-center px-4 pt-8 pb-1 relative">
+          <h1 className="text-[32px] font-bold text-black tracking-tight leading-none w-full text-left">Chats</h1>
+          {/* Edit button yahan se hamesha ke liye hata diya gaya hai */}
         </div>
         
         {/* iOS Style Search Bar */}
@@ -123,15 +129,23 @@ export default function ChatList({ activeJid, onSelectChat }) {
             <input 
               type="text" 
               placeholder="Search" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-transparent border-none outline-none w-full text-[17px] text-black placeholder-[#8E8E93]" 
             />
+            {/* Clear search button (X) */}
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="text-[#8E8E93] ml-1 hover:text-gray-600 transition">
+                <svg viewBox="0 0 20 20" className="w-4 h-4" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/></svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Chat Items List */}
+      {/* Chat Items List (Filtered) */}
       <div className="flex-1 overflow-y-auto thin-scroll bg-white" onScroll={onScroll}>
-        {chats.map((chat) => {
+        {filteredChats.map((chat) => {
           const displayName = getDisplayName(chat);
           const initials = getInitials(displayName);
           const isUnread = chat.unreadCount > 0;
@@ -155,7 +169,7 @@ export default function ChatList({ activeJid, onSelectChat }) {
                 </div>
               </div>
 
-              {/* Chat Content (iOS Partial Border Bottom) */}
+              {/* Chat Content */}
               <div className="flex-1 min-w-0 pr-4 py-3 border-b border-[#C6C6C8]/60 h-full flex flex-col justify-center">
                 
                 <div className="flex justify-between items-center mb-0.5">
@@ -169,7 +183,6 @@ export default function ChatList({ activeJid, onSelectChat }) {
                 
                 <div className="flex justify-between items-center mt-0.5">
                   <p className="text-[15px] text-[#8E8E93] truncate w-[85%] leading-snug">
-                    {/* Prefix with Media icon if last message was media */}
                     {chat.lastMessage === '[image]' && '📷 Photo'}
                     {chat.lastMessage === '[video]' && '🎥 Video'}
                     {chat.lastMessage === '[audio]' && '🎵 Audio'}
@@ -188,13 +201,13 @@ export default function ChatList({ activeJid, onSelectChat }) {
           );
         })}
 
-        {!chats.length && !loading && (
+        {!filteredChats.length && !loading && (
           <div className="flex flex-col items-center justify-center h-40 text-[#8E8E93]">
-            <p className="text-[17px]">No chats yet</p>
+            <p className="text-[17px]">{searchQuery ? 'No results found' : 'No chats yet'}</p>
           </div>
         )}
         
-        {loading && (
+        {loading && !searchQuery && (
           <div className="flex justify-center py-6">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#007AFF]"></div>
           </div>
