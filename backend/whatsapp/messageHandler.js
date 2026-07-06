@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { saveMessage, isFirstTimeContact, extractText, saveStatus } = require('./chatStore');
+const { saveMessage, getChatMeta, extractText, saveStatus } = require('./chatStore');
 const { runAutoResponder } = require('./autoResponder');
 
 async function fireOutgoingWebhook(payload) {
@@ -29,12 +29,28 @@ async function handleIncomingMessage(sock, upsert) {
       }
 
       const direction = msg.key.fromMe ? 'out' : 'in';
-      const firstTime = direction === 'in' ? await isFirstTimeContact(jid) : false;
       const pushName = msg.pushName || 'User';
 
-      // FIX 2: Profile Pic fetch karna (with safety)
-      let profilePicUrl = null;
+      // Ek hi Firestore read se pata chal jata hai: naya contact hai ya
+      // nahi, aur DP pehle se saved hai ya nahi. Isi read se firstTime
+      // nikaal rahe hain (pehle isFirstTimeContact() ka alag call lagta tha).
+      let chatMeta = { isFirstTime: false, hasProfilePic: true };
       if (direction === 'in') {
+        try {
+          chatMeta = await getChatMeta(jid);
+        } catch (metaError) {
+          console.error('[chatMeta] read failed:', metaError.message);
+        }
+      }
+      const firstTime = chatMeta.isFirstTime;
+
+      // FIX 2: Profile Pic sirf tab fetch karo jab zaroorat ho —
+      // naya contact ho, ya humare paas abhi tak uski DP save nahi hai.
+      // Render free-tier par har message par DP fetch karna rate limit
+      // aur high CPU dono cause kar raha tha, isliye ab ye sirf kabhi
+      // kabhi (per-contact, not per-message) chalega.
+      let profilePicUrl;
+      if (direction === 'in' && (firstTime || !chatMeta.hasProfilePic)) {
         try {
           // Baileys engine se DP ka URL nikal rahe hain
           profilePicUrl = await sock.profilePictureUrl(jid, 'image');
@@ -44,7 +60,10 @@ async function handleIncomingMessage(sock, upsert) {
         }
       }
 
-      // Ab DP aur Name dono saveMessage ko bhej rahe hain taaki DB me update ho jaye
+      // Ab DP (agar fetch hui) aur Name dono saveMessage ko bhej rahe hain.
+      // profilePicUrl 'undefined' rehta hai jab hum fetch hi nahi karte —
+      // saveMessage isi wajah se sirf tabhi update karta hai jab value
+      // explicitly di gayi ho, warna existing DP overwrite nahi hogi.
       await saveMessage(jid, msg, direction, profilePicUrl, pushName);
 
       if (direction === 'in') {
