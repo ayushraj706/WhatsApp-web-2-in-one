@@ -11,7 +11,8 @@ function formatPhoneNumber(num) {
   return '+' + num;
 }
 
-export default function ChatWindow({ jid }) {
+// NAYA PROP: onBack add kiya gaya hai taaki back button sach me kaam kare
+export default function ChatWindow({ jid, onBack }) {
   const [messages, setMessages] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -24,6 +25,7 @@ export default function ChatWindow({ jid }) {
   const scrollContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const pollingRef = useRef(null);
 
   // --- SCROLLING LOGIC ---
   const scrollToBottom = (behavior = "smooth") => {
@@ -76,6 +78,28 @@ export default function ChatWindow({ jid }) {
     })();
   }, [jid]);
 
+  // 🔥 LIVE SYNC MAGIC: Har 3 second me naye messages check karega
+  useEffect(() => {
+    if (!jid) return;
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await api.getMessages(jid);
+        if (res.messages) {
+          setMessages(prev => {
+            const currentIds = new Set(prev.map(m => m.id));
+            const newMsgs = res.messages.filter(m => !currentIds.has(m.id));
+            if (newMsgs.length > 0) {
+               setTimeout(() => scrollToBottom("smooth"), 100);
+               return [...prev, ...newMsgs];
+            }
+            return prev;
+          });
+        }
+      } catch (err) {}
+    }, 3000);
+    return () => clearInterval(pollingRef.current);
+  }, [jid]);
+
   function onScroll(e) {
     if (e.target.scrollTop < 100) loadOlder();
   }
@@ -118,17 +142,24 @@ export default function ChatWindow({ jid }) {
            <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="3"/>
            <path d="M50 30 v40 M30 50 h40" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
         </svg>
-        <p className="text-[17px] font-medium text-[#8E8E93]">WhatsApp Business</p>
+        <p className="text-[17px] font-medium text-[#8E8E93]">BaseKey Web CRM</p>
       </div>
     );
   }
 
   const hasText = draft.trim().length > 0;
 
-  // DYNAMIC NAME EXTRACTION (Backend se pushName nikalna list messages se)
+  // DYNAMIC NAME & DETAILS EXTRACTION
   const incomingMsgWithName = messages.find(m => m.direction === 'in' && m.pushName && m.pushName !== 'User');
   const rawNumber = jid.split('@')[0];
-  const displayName = incomingMsgWithName ? incomingMsgWithName.pushName : formatPhoneNumber(rawNumber);
+  const formattedNumber = formatPhoneNumber(rawNumber);
+  
+  // Agar asli naam mila toh wo dikhayenge, nahi toh number
+  const hasRealName = !!incomingMsgWithName;
+  const displayName = hasRealName ? incomingMsgWithName.pushName : formattedNumber;
+  // Subtitle me additional details
+  const subTitleInfo = hasRealName ? `${formattedNumber} • Online (Bot)` : 'Online (Bot Active)';
+  
   const initials = displayName.startsWith('+') ? displayName.slice(-2) : displayName.substring(0, 2).toUpperCase();
 
   return (
@@ -160,36 +191,26 @@ export default function ChatWindow({ jid }) {
       )}
 
       {/* iOS STYLE HEADER */}
-      <div className="px-3 py-2.5 bg-[#F6F6F6]/95 backdrop-blur-md border-b border-[#C6C6C8]/60 flex items-center justify-between z-10 sticky top-0 shadow-sm">
+      <div className="px-3 py-2.5 bg-[#F6F6F6]/95 backdrop-blur-md border-b border-[#C6C6C8]/60 flex items-center justify-between z-10 sticky top-0 shadow-sm cursor-pointer">
         <div className="flex items-center gap-2 overflow-hidden">
-          {/* iOS Back Button (Visual) */}
-          <button className="text-[#007AFF] flex items-center gap-1 -ml-1 pr-1 hover:opacity-70 transition-opacity">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          {/* iOS Back Button (Ab sach me kaam karega) */}
+          <button 
+            onClick={onBack} 
+            className="text-[#007AFF] flex items-center gap-1 -ml-1 pr-1 hover:opacity-70 transition-opacity"
+            title="Go Back"
+          >
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
-            <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-tr from-[#94a3b8] to-[#cbd5e1] text-white flex items-center justify-center font-medium shrink-0 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
+            <div className="w-[38px] h-[38px] rounded-full overflow-hidden bg-gradient-to-tr from-[#94a3b8] to-[#cbd5e1] text-white flex items-center justify-center font-medium shrink-0 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.1)]">
               {initials}
             </div>
           </button>
           
           <div className="flex flex-col min-w-0 pr-2">
             <span className="font-semibold text-black text-[16px] truncate tracking-tight">{displayName}</span>
-            <span className="text-[12px] text-[#8E8E93] truncate">tap here for contact info</span>
+            <span className="text-[12px] text-[#8E8E93] truncate">{subTitleInfo}</span>
           </div>
-        </div>
-        
-        {/* iOS Header Icons */}
-        <div className="flex items-center gap-4 text-[#007AFF] px-2 shrink-0">
-          <button className="hover:opacity-70 transition-opacity">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15.6 11.6L22 7v10l-6.4-4.6v-1zM2 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/>
-            </svg>
-          </button>
-          <button className="hover:opacity-70 transition-opacity">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-            </svg>
-          </button>
         </div>
       </div>
 
@@ -220,7 +241,7 @@ export default function ChatWindow({ jid }) {
                   isOut ? 'bg-[#DCF7C5] rounded-br-[4px]' : 'bg-white rounded-bl-[4px] border border-[#E5E5EA]'
                 }`}
               >
-                {/* Media Render (Clickable for preview) */}
+                {/* Media Render */}
                 {(isImage || isVideo) && (
                   <div 
                     className="relative cursor-pointer mb-1.5 mt-0.5 overflow-hidden rounded-[14px] group"
@@ -283,7 +304,7 @@ export default function ChatWindow({ jid }) {
           </svg>
         </button>
 
-        {/* Text Input (Rounded Pill shape) */}
+        {/* Text Input */}
         <div className="flex-1 bg-white border border-[#D1D1D6] rounded-[20px] flex items-end min-h-[38px] mb-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
           <textarea
             value={draft}
@@ -299,7 +320,6 @@ export default function ChatWindow({ jid }) {
             rows="1"
           />
           
-          {/* Sticker icon inside input (iOS style) - visible only if empty */}
           {!hasText && (
              <button className="p-2 mr-0.5 text-[#8E8E93] hover:text-gray-600 transition" onClick={() => fileInputRef.current.click()}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
