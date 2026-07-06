@@ -2,6 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
+// 1. WhatsApp Engine Import (BaseKey CRM Core)
+const { startWhatsAppSession } = require('./whatsapp/session');
+
+// 2. Route Imports
 const authRoutes = require('./routes/auth');
 const chatsRoutes = require('./routes/chats');
 const messagesRoutes = require('./routes/messages');
@@ -12,14 +16,14 @@ const statusRoutes = require('./routes/status');
 
 const app = express();
 
-// 1. Bulletproof CORS Policy (Yeh Vercel ko kabhi block nahi karega)
+// 3. Bulletproof CORS Policy (Yeh Vercel ko kabhi block nahi karega)
 app.use(cors({
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
 }));
 
-// 2. Request Tracker (Isse pata chalega ki connection juda ya nahi)
+// 4. Request Tracker (Isse pata chalega ki connection juda ya nahi)
 app.use((req, res, next) => {
   console.log(`[Rasta Check] Browser ne request bheji: ${req.method} ${req.url}`);
   next();
@@ -27,14 +31,14 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '2mb' })); // JSON bodies only
 
-// 3. Cron-Job / Uptime Ping Tracker (Pura foolproof)
+// 5. Cron-Job / Uptime Ping Tracker (Pura foolproof)
 app.get('/', (req, res) => {
   res.status(200).send('BaseKey WhatsApp API is Zinda! 🚀 (Server Active)');
 });
 
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
-// API Routes
+// 6. API Routes Mount
 app.use('/api/auth', authRoutes);
 app.use('/api/chats', chatsRoutes);
 app.use('/api/messages', messagesRoutes);
@@ -43,11 +47,33 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/status', statusRoutes);
 
-// Log RSS memory usage periodically
+// 7. Global Error Handler (Taaki app crash na ho)
+app.use((err, req, res, next) => {
+  console.error('[Server Error]:', err.message);
+  res.status(500).json({ error: 'Internal Server Error', details: err.message });
+});
+
+// 8. Log RSS memory usage periodically
 setInterval(() => {
   const mb = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
   console.log(`[memory] RSS: ${mb} MB`);
 }, 60000);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`[server] listening on port ${PORT}`));
+
+// 9. Boot Server and WhatsApp Session together
+app.listen(PORT, async () => {
+  console.log(`[server] listening on port ${PORT}`);
+  
+  // WhatsApp Bot ko zinda karne ka trigger yahan add kiya hai
+  try {
+    console.log('[system] Starting WhatsApp Baileys Engine...');
+    
+    // Agar startWhatsAppSession function properly imported aur file ready hai, tabhi yeh chalega.
+    // Make sure ./whatsapp/session.js exist karta ho.
+    await startWhatsAppSession();
+    
+  } catch (error) {
+    console.error('[system] Failed to start WhatsApp session:', error);
+  }
+});
