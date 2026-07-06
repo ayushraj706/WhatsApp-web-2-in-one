@@ -11,7 +11,6 @@ const NodeCache = require('node-cache');
 const { useFirestoreAuthState } = require('./firestoreAuthState');
 const { handleIncomingMessage } = require('./messageHandler');
 
-// AB ISKO KABHI CHANGE MAT KARNA - Yeh permanent ho gaya!
 const DEFAULT_SESSION_ID = 'basekey-main'; 
 
 const state = {
@@ -38,27 +37,25 @@ async function startSession(opts = {}) {
     return getStatus();
   }
 
-  // TRACKER 1: Firebase check
-  console.log(`[Session Tracker 1] -> Firebase Auth State database se laane ja raha hai...`);
+  console.log(`[Session] -> Fetching Firebase Auth State for ID: ${DEFAULT_SESSION_ID}...`);
   let authState, saveCreds;
   try {
     const firestoreResult = await useFirestoreAuthState(DEFAULT_SESSION_ID);
     authState = firestoreResult.state;
     saveCreds = firestoreResult.saveCreds;
-    console.log(`[Session Tracker 2] -> Firebase Auth State mil gaya! Database connection SUCCESS.`);
+    console.log(`[Session] -> Firebase connection SUCCESS.`);
   } catch (err) {
-    console.error(`[Firebase Error] -> Firebase connection me gadbad hai! Apni FIREBASE_PRIVATE_KEY check karo. Error:`, err);
+    console.error(`[Firebase Error] -> Check FIREBASE_PRIVATE_KEY. Error:`, err);
     throw new Error('Firebase Auth init failed: ' + err.message);
   }
 
-  // TRACKER 3: Baileys Engine check
-  console.log(`[Session Tracker 3] -> WhatsApp (Baileys) engine ka latest version check kar raha hai...`);
+  console.log(`[Session] -> Fetching latest Baileys version...`);
   const { version } = await fetchLatestBaileysVersion();
-  console.log(`[Session Tracker 4] -> Baileys version mil gaya: v${version.join('.')}`);
+  console.log(`[Session] -> Baileys version: v${version.join('.')}`);
 
-  const logger = pino({ level: 'error' }); // Logs saaf rakhne ke liye
+  const logger = pino({ level: 'error' });
 
-  console.log(`[Session Tracker 5] -> WhatsApp Socket (Engine) ban raha hai...`);
+  console.log(`[Session] -> Initializing WhatsApp Socket Engine...`);
   const sock = makeWASocket({
     version,
     logger,
@@ -72,24 +69,21 @@ async function startSession(opts = {}) {
     syncFullHistory: false,
     markOnlineOnConnect: false,
   });
-  console.log(`[Session Tracker 6] -> Socket engine ban gaya! Events setup ho rahe hain.`);
 
   state.sock = sock;
   state.status = 'connecting';
   state.lastError = null;
 
-  // Pairing Code Logic
   if (opts.phoneNumber && !authState.creds.registered) {
-    console.log(`[Session Tracker] -> Pairing code request kar raha hai for ${opts.phoneNumber}...`);
-    // Thoda delay diya hai taaki socket pehle properly connect ho jaye
+    console.log(`[Session] -> Requesting pairing code for ${opts.phoneNumber}...`);
     setTimeout(async () => {
       try {
         const code = await sock.requestPairingCode(opts.phoneNumber.replace(/[^0-9]/g, ''));
         state.pairingCode = code;
         state.status = 'pairing_code';
-        console.log(`[Session Tracker] -> SUCCESS! Pairing code mil gaya:`, code);
+        console.log(`[Session] -> SUCCESS! Pairing code:`, code);
       } catch (err) {
-        console.error(`[Session Tracker Error] -> Pairing code laane me fail:`, err.message);
+        console.error(`[Session Error] -> Pairing code failed:`, err.message);
         state.lastError = err.message;
       }
     }, 2500); 
@@ -100,12 +94,8 @@ async function startSession(opts = {}) {
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
     
-    if (qr || connection || lastDisconnect) {
-      console.log(`[Connection Update] -> Status: ${connection || 'N/A'}, QR Aaya?: ${!!qr}`);
-    }
-
     if (qr && !opts.phoneNumber) {
-      console.log(`[Session Tracker] -> QR Code mil gaya! Vercel ko bhej raha hoon.`);
+      console.log(`[Session] -> QR Code generated.`);
       state.qrDataUrl = await QRCode.toDataURL(qr);
       state.status = 'qr_ready';
     }
@@ -123,12 +113,11 @@ async function startSession(opts = {}) {
       state.status = 'disconnected';
 
       if (!loggedOut) {
-        console.log('⚠️ [whatsapp] connection closed, reconnecting...', statusCode);
+        console.log(`⚠️ [whatsapp] Connection closed (Status: ${statusCode}), reconnecting in 3s...`);
         setTimeout(() => startSession(opts).catch(console.error), 3000);
       } else {
-        // YAHAN HAI ASLI PERMANENT FIX 🔥
         console.log('🚨 [whatsapp] LOGGED OUT (401 Error) - User must relink device');
-        console.log('🧹 [System] -> Auto-deleting old corrupted session from Firebase...');
+        console.log('🧹 [System] -> Auto-deleting corrupted session from Firebase...');
         
         state.sock = null;
         state.qrDataUrl = null;
@@ -137,12 +126,10 @@ async function startSession(opts = {}) {
         try {
           const { clearSession } = await useFirestoreAuthState(DEFAULT_SESSION_ID);
           await clearSession();
-          console.log('✅ [System] -> Purana kachra saaf! Fresh start lene ko taiyar hai.');
-          
-          // Kachra saaf karne ke baad engine ko turant fresh start do
+          console.log('✅ [System] -> Session cleaned. Ready for fresh start.');
           startSession(opts).catch(console.error);
         } catch (err) {
-          console.error('❌ [System] -> Kachra saaf karne me error aayi:', err);
+          console.error('❌ [System] -> Session cleanup failed:', err);
         }
       }
     }
@@ -150,9 +137,15 @@ async function startSession(opts = {}) {
 
   sock.ev.on('messages.upsert', async (m) => {
     try {
-      await handleIncomingMessage(sock, m);
+      if (m.type === 'notify') {
+        for (const msg of m.messages) {
+          if (!msg.key.fromMe) {
+            await handleIncomingMessage(sock, msg);
+          }
+        }
+      }
     } catch (err) {
-      console.error('[messageHandler] error:', err);
+      console.error('[messageHandler] Error processing incoming message:', err);
     }
   });
 
