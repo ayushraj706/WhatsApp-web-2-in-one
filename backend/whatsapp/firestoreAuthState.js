@@ -1,79 +1,47 @@
-/**
- * A drop-in replacement for Baileys' useMultiFileAuthState, backed by Firestore.
- * FIXED: Dynamic creds update and robust cleanup logic.
- */
-const { db } = require('../config/firebase');
-const { initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
+// backend/whatsapp/connection.js
+const pino = require('pino');
+const makeWASocket = require('@whiskeysockets/baileys').default;
+const { useFirestoreAuthState, clearSession } = require('./firestoreAuthState');
 
-async function useFirestoreAuthState(sessionId) {
-  const sessionRef = db.collection('wa_sessions').doc(sessionId);
-  const keysCol = sessionRef.collection('keys');
+// Keywords Baileys logs internally when a session's crypto state is broken.
+const CORRUPTION_SIGNALS = [
+  'InvalidPreKey',
+  'MessageCounterError',
+  'Bad MAC',
+  'No matching sessions found for message',
+];
 
-  async function readData(key) {
-    const doc = await keysCol.doc(key).get();
-    if (!doc.exists) return null;
-    const raw = doc.data().json;
-    return JSON.parse(raw, BufferJSON.reviver);
-  }
-
-  async function writeData(key, value) {
-    const json = JSON.stringify(value, BufferJSON.replacer);
-    await keysCol.doc(key).set({ json, updatedAt: Date.now() });
-  }
-
-  async function removeData(key) {
-    await keysCol.doc(key).delete().catch(() => {});
-  }
-
-  // --- ROBUST AUTH LOAD ---
-  let creds = await readData('creds');
-  if (!creds) {
-    console.log('[Auth] Initializing fresh session...');
-    // Cleanup existing keys if initialization happens
-    const snap = await keysCol.get();
-    if (!snap.empty) {
-      const batch = db.batch();
-      snap.docs.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-    }
-    creds = initAuthCreds();
-  }
-
-  return {
-    state: {
-      creds,
-      keys: {
-        get: async (type, ids) => {
-          const data = {};
-          await Promise.all(
-            ids.map(async (id) => {
-              let value = await readData(`${type}-${id}`);
-              if (type === 'app-state-sync-key' && value) {
-                value = proto.Message.AppStateSyncKeyData.fromObject(value);
-              }
-              data[id] = value;
-            })
-          );
-          return data;
-        },
-        set: async (data) => {
-          const tasks = [];
-          for (const category in data) {
-            for (const id in data[category]) {
-              const value = data[category][id];
-              const key = `${category}-${id}`;
-              tasks.push(value ? writeData(key, value) : removeData(key));
-            }
-          }
-          await Promise.all(tasks);
-        },
-      },
-    },
-    saveCreds: async () => {
-      // DYNAMIC UPDATE: Har baar saveCreds call hone par updated creds likho
-      await writeData('creds', creds);
-    },
-  };
+function isCorruptionLog(args) {
+  const text = args.map(a => (typeof a === 'string' ? a : a?.message || '')).join(' ');
+  return CORRUPTION_SIGNALS.some(sig => text.includes(sig));
 }
 
-module.exports = { useFirestoreAuthState };
+async function startSession(sessionId, onNeedsRestart) {
+  const { state, saveCreds } = await useFirestoreAuthState(sessionId);
+
+  const baseLogger = pino({ level: 'warn' });
+  // Wrap error/warn so we can inspect what Baileys is logging without
+  // changing its own logging behavior.
+  const logger = Object.create(baseLogger);
+  logger.error = (...args) => {
+    if (isCorruptionLog(args)) {
+      console.warn(`[Auth] Corrupt session detected for "${sessionId}", wiping...`);
+      clearSession(sessionId)
+        .then(() => onNeedsRestart?.(sessionId)) // caller restarts -> initAuthCreds() -> new QR
+        .catch(err => console.error('[Auth] Failed to clear session:', err));
+    }
+    return baseLogger.error(...args);
+  };
+
+  const sock = makeWASocket({
+    auth: state,
+    logger,
+    printQRInTerminal: true,
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  return sock;
+}
+
+module.exports = { startSession };
