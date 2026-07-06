@@ -8,10 +8,25 @@ const QRCode = require('qrcode');
 const pino = require('pino');
 const NodeCache = require('node-cache');
 
-const { useFirestoreAuthState } = require('./firestoreAuthState');
+const { useFirestoreAuthState, clearSession } = require('./firestoreAuthState');
 const { handleIncomingMessage } = require('./messageHandler');
 
 const DEFAULT_SESSION_ID = 'basekey-main'; 
+
+// --- CCTV LOGIC START ---
+const CORRUPTION_SIGNALS = ['InvalidPreKey', 'MessageCounterError', 'Bad MAC', 'No matching sessions found'];
+const baseLogger = pino({ level: 'warn' });
+const corruptLogger = Object.create(baseLogger);
+
+corruptLogger.error = (...args) => {
+  const text = args.map(a => (typeof a === 'string' ? a : a?.message || '')).join(' ');
+  if (CORRUPTION_SIGNALS.some(sig => text.includes(sig))) {
+    console.warn(`[Auth] Corrupt session detected, wiping and restarting...`);
+    clearSession(DEFAULT_SESSION_ID).then(() => process.exit(1)); 
+  }
+  return baseLogger.error(...args);
+};
+// --- CCTV LOGIC END ---
 
 const state = {
   sock: null,
@@ -43,26 +58,20 @@ async function startSession(opts = {}) {
     const firestoreResult = await useFirestoreAuthState(DEFAULT_SESSION_ID);
     authState = firestoreResult.state;
     saveCreds = firestoreResult.saveCreds;
-    console.log(`[Session] -> Firebase connection SUCCESS.`);
   } catch (err) {
-    console.error(`[Firebase Error] -> Check FIREBASE_PRIVATE_KEY. Error:`, err);
     throw new Error('Firebase Auth init failed: ' + err.message);
   }
 
-  console.log(`[Session] -> Fetching latest Baileys version...`);
   const { version } = await fetchLatestBaileysVersion();
-  console.log(`[Session] -> Baileys version: v${version.join('.')}`);
-
-  const logger = pino({ level: 'error' });
-
-  console.log(`[Session] -> Initializing WhatsApp Socket Engine...`);
+  
+  // CCTV ACTIVE: logger: corruptLogger
   const sock = makeWASocket({
     version,
-    logger,
+    logger: corruptLogger, 
     printQRInTerminal: true,
     auth: {
       creds: authState.creds,
-      keys: makeCacheableSignalKeyStore(authState.keys, logger),
+      keys: makeCacheableSignalKeyStore(authState.keys, corruptLogger),
     },
     msgRetryCounterCache: msgRetryCache,
     generateHighQualityLinkPreview: true,
@@ -72,18 +81,14 @@ async function startSession(opts = {}) {
 
   state.sock = sock;
   state.status = 'connecting';
-  state.lastError = null;
 
   if (opts.phoneNumber && !authState.creds.registered) {
-    console.log(`[Session] -> Requesting pairing code for ${opts.phoneNumber}...`);
     setTimeout(async () => {
       try {
         const code = await sock.requestPairingCode(opts.phoneNumber.replace(/[^0-9]/g, ''));
         state.pairingCode = code;
         state.status = 'pairing_code';
-        console.log(`[Session] -> SUCCESS! Pairing code:`, code);
       } catch (err) {
-        console.error(`[Session Error] -> Pairing code failed:`, err.message);
         state.lastError = err.message;
       }
     }, 2500); 
@@ -95,7 +100,6 @@ async function startSession(opts = {}) {
     const { connection, lastDisconnect, qr } = update;
     
     if (qr && !opts.phoneNumber) {
-      console.log(`[Session] -> QR Code generated.`);
       state.qrDataUrl = await QRCode.toDataURL(qr);
       state.status = 'qr_ready';
     }
@@ -104,71 +108,29 @@ async function startSession(opts = {}) {
       state.status = 'connected';
       state.qrDataUrl = null;
       state.pairingCode = null;
-      console.log('✅ [whatsapp] Successfully connected as', sock.user?.id);
+      console.log('✅ [whatsapp] Connected as', sock.user?.id);
     }
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const loggedOut = statusCode === DisconnectReason.loggedOut;
-      state.status = 'disconnected';
-
-      if (!loggedOut) {
-        console.log(`⚠️ [whatsapp] Connection closed (Status: ${statusCode}), reconnecting in 3s...`);
+      if (statusCode !== DisconnectReason.loggedOut) {
         setTimeout(() => startSession(opts).catch(console.error), 3000);
       } else {
-        console.log('🚨 [whatsapp] LOGGED OUT (401 Error) - User must relink device');
-        console.log('🧹 [System] -> Auto-deleting corrupted session from Firebase...');
-        
-        state.sock = null;
-        state.qrDataUrl = null;
-        state.pairingCode = null;
-
-        try {
-          const { clearSession } = await useFirestoreAuthState(DEFAULT_SESSION_ID);
-          await clearSession();
-          console.log('✅ [System] -> Session cleaned. Ready for fresh start.');
-          startSession(opts).catch(console.error);
-        } catch (err) {
-          console.error('❌ [System] -> Session cleanup failed:', err);
-        }
+        await clearSession(DEFAULT_SESSION_ID);
+        state.status = 'disconnected';
       }
     }
   });
 
   sock.ev.on('messages.upsert', async (m) => {
-    try {
-      if (m.type === 'notify') {
-        for (const msg of m.messages) {
-          if (!msg.key.fromMe) {
-            await handleIncomingMessage(sock, msg);
-          }
-        }
+    if (m.type === 'notify') {
+      for (const msg of m.messages) {
+        if (!msg.key.fromMe) await handleIncomingMessage(sock, msg);
       }
-    } catch (err) {
-      console.error('[messageHandler] Error processing incoming message:', err);
     }
   });
 
   return getStatus();
 }
 
-function getSocket() {
-  if (!state.sock || state.status !== 'connected') {
-    throw new Error('WhatsApp is not connected. Link the device first.');
-  }
-  return state.sock;
-}
-
-async function logoutSession() {
-  if (state.sock) {
-    try {
-      await state.sock.logout();
-    } catch (_) {}
-  }
-  const { clearSession } = await useFirestoreAuthState(DEFAULT_SESSION_ID);
-  await clearSession();
-  state.sock = null;
-  state.status = 'disconnected';
-}
-
-module.exports = { startSession, getSocket, getStatus, logoutSession };
+module.exports = { startSession, getStatus, clearSession };
