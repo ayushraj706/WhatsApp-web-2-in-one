@@ -30,7 +30,8 @@ function getMediaType(message) {
  * deleted or overwritten wholesale - this keeps memory flat regardless
  * of how large history grows, and satisfies the "never delete" requirement.
  */
-async function saveMessage(jid, msg, direction) {
+// YAHAN CHANGE HAI: Naye arguments (profilePicUrl, pushName) add kiye
+async function saveMessage(jid, msg, direction, profilePicUrl = null, pushName = null) {
   const chatRef = db.collection('chats').doc(jid);
   const msgId = msg.key.id;
   const messageType = getMediaType(msg.message);
@@ -48,6 +49,7 @@ async function saveMessage(jid, msg, direction) {
     }
   }
 
+  // Individual message history
   await chatRef.collection('messages').doc(msgId).set({
     id: msgId,
     direction,
@@ -58,7 +60,7 @@ async function saveMessage(jid, msg, direction) {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  // YAHAN CHANGE HAI: Parent document update object banaya
+  // Parent chat document update (for the sidebar list)
   const updateData = {
     jid,
     lastMessage: text || (messageType ? `[${messageType.replace('Message', '')}]` : ''),
@@ -69,12 +71,17 @@ async function saveMessage(jid, msg, direction) {
         : admin.firestore.FieldValue.increment(0),
   };
 
-  // Agar message ke sath user ka asli naam aaya hai, toh usko bhi update payload me daal do
-  if (msg.pushName) {
-    updateData.pushName = msg.pushName;
+  // Naya Data: Agar messageHandler se pushName aaya hai, toh use update karo
+  if (pushName && pushName !== 'User') {
+    updateData.pushName = pushName;
   }
 
-  // Firebase me save kar do
+  // Naya Data: Agar user ki DP available hai, toh use save karo
+  if (profilePicUrl) {
+    updateData.profilePicUrl = profilePicUrl;
+  }
+
+  // Firebase me save/merge kar do
   await chatRef.set(updateData, { merge: true });
 }
 
