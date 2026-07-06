@@ -1,12 +1,6 @@
 /**
- * A drop-in replacement for Baileys' useMultiFileAuthState, but backed by
- * Firestore instead of the local filesystem. This is what lets the bot
- * reconnect after a redeploy/restart on ephemeral hosts (Render, Railway,
- * etc.) WITHOUT asking the user to scan the QR code again.
- *
- * Keys are stored under collection `wa_sessions/{sessionId}/keys/{keyId}`.
- * Only the exact keys Baileys asks for are read/written - we never load
- * the whole keys collection into memory.
+ * A drop-in replacement for Baileys' useMultiFileAuthState, backed by Firestore.
+ * UPDATED: Includes auto-cleanup logic to prevent session corruption.
  */
 const { db } = require('../config/firebase');
 const { initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
@@ -31,7 +25,24 @@ async function useFirestoreAuthState(sessionId) {
     await keysCol.doc(key).delete().catch(() => {});
   }
 
-  const creds = (await readData('creds')) || initAuthCreds();
+  // --- AUTO CLEANUP LOGIC ---
+  // Agar creds (encryption keys) database mein hain, toh unhe read karo, 
+  // warna fresh init karo.
+  let creds = await readData('creds');
+  
+  if (!creds) {
+    console.log('[Auth] No existing session found, initializing fresh session...');
+    // Fresh session ke liye purana session ka kachra saaf kar do
+    await sessionRef.collection('keys').get().then(snap => {
+       const batch = db.batch();
+       snap.docs.forEach(doc => batch.delete(doc.ref));
+       return batch.commit();
+    }).catch(err => console.error('[Auth] Cleanup failed:', err));
+    
+    creds = initAuthCreds();
+  } else {
+    console.log('[Auth] Existing session loaded.');
+  }
 
   return {
     state: {
@@ -66,7 +77,6 @@ async function useFirestoreAuthState(sessionId) {
     saveCreds: async () => {
       await writeData('creds', creds);
     },
-    // Wipes the whole session (used when the user wants to unlink the device)
     clearSession: async () => {
       const snap = await keysCol.get();
       const batchDeletes = snap.docs.map((d) => d.ref.delete());
