@@ -8,12 +8,18 @@ const QRCode = require('qrcode');
 const pino = require('pino');
 const NodeCache = require('node-cache');
 
-// FIX: clearSession is exported directly from firestoreAuthState.js,
-// it is NOT part of the object returned by useFirestoreAuthState().
 const { useFirestoreAuthState, clearSession } = require('./firestoreAuthState');
 const { handleIncomingMessage } = require('./messageHandler');
 
 const DEFAULT_SESSION_ID = 'basekey-main';
+
+// Strings Baileys logs internally when the Signal session state is corrupt.
+const CORRUPTION_SIGNALS = [
+  'InvalidPreKey',
+  'MessageCounterError',
+  'Bad MAC',
+  'No matching sessions found',
+];
 
 const state = {
   sock: null,
@@ -24,6 +30,90 @@ const state = {
 };
 
 const msgRetryCache = new NodeCache();
+
+// Guards against the logger firing multiple times (e.g. several bad-MAC
+// lines in a row) and triggering clearSession/process.exit more than once.
+let isHealing = false;
+
+/**
+ * "CCTV" logger: behaves like a normal pino logger, but watches every
+ * warn/error line for signs of a corrupted Signal session. If it sees one,
+ * it wipes the Firestore session and kills the process so Render's restart
+ * policy brings the container back up with a clean slate (and a fresh QR).
+ */
+function createSelfHealingLogger(sessionId) {
+  const baseLogger = pino({ level: 'error' });
+
+  const containsCorruptionSignal = (args) => {
+    const text = args
+      .map((a) => {
+        if (typeof a === 'string') return a;
+        if (a instanceof Error) return a.message;
+        if (a && typeof a === 'object') {
+          try {
+            return JSON.stringify(a);
+          } catch (_) {
+            return '';
+          }
+        }
+        return '';
+      })
+      .join(' ');
+    return CORRUPTION_SIGNALS.some((signal) => text.includes(signal));
+  };
+
+  const triggerSelfHeal = (args) => {
+    if (isHealing) return;
+    isHealing = true;
+
+    console.error('🚨 [Self-Healing] Corrupted session signal detected:', ...args);
+    console.error('🧹 [Self-Healing] Wiping Firestore session and restarting process...');
+
+    clearSession(sessionId)
+      .catch((err) => console.error('❌ [Self-Healing] clearSession failed:', err))
+      .finally(() => {
+        // Exit non-zero so Render's process supervisor restarts the
+        // container. On the next boot, useFirestoreAuthState will find
+        // no creds and generate a fresh session (new QR).
+        process.exit(1);
+      });
+  };
+
+  const logger = Object.create(baseLogger);
+
+  logger.error = (...args) => {
+    if (containsCorruptionSignal(args)) {
+      triggerSelfHeal(args);
+    }
+    return baseLogger.error(...args);
+  };
+
+  logger.warn = (...args) => {
+    if (containsCorruptionSignal(args)) {
+      triggerSelfHeal(args);
+    }
+    return baseLogger.warn(...args);
+  };
+
+  // makeCacheableSignalKeyStore and Baileys internals call logger.child(...)
+  // to get scoped child loggers — make sure those also inherit the hook.
+  logger.child = (...args) => {
+    const child = baseLogger.child(...args);
+    const wrappedChild = Object.create(child);
+    wrappedChild.error = (...cArgs) => {
+      if (containsCorruptionSignal(cArgs)) triggerSelfHeal(cArgs);
+      return child.error(...cArgs);
+    };
+    wrappedChild.warn = (...cArgs) => {
+      if (containsCorruptionSignal(cArgs)) triggerSelfHeal(cArgs);
+      return child.warn(...cArgs);
+    };
+    wrappedChild.child = logger.child;
+    return wrappedChild;
+  };
+
+  return logger;
+}
 
 function getStatus() {
   return {
@@ -55,7 +145,8 @@ async function startSession(opts = {}) {
   const { version } = await fetchLatestBaileysVersion();
   console.log(`[Session] -> Baileys version: v${version.join('.')}`);
 
-  const logger = pino({ level: 'error' });
+  // Self-Healing (CCTV) logger — watches for session corruption signals.
+  const logger = createSelfHealingLogger(DEFAULT_SESSION_ID);
 
   console.log(`[Session] -> Initializing WhatsApp Socket Engine...`);
   const sock = makeWASocket({
@@ -67,7 +158,12 @@ async function startSession(opts = {}) {
       keys: makeCacheableSignalKeyStore(authState.keys, logger),
     },
     msgRetryCounterCache: msgRetryCache,
-    generateHighQualityLinkPreview: true,
+    // Resource optimization for Render's free tier: generous timeouts so
+    // slow cold-starts don't get mistaken for a dead connection, and skip
+    // the extra link-preview fetch to save memory/CPU.
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 60000,
+    generateHighQualityLinkPreview: false,
     syncFullHistory: false,
     markOnlineOnConnect: false,
   });
@@ -115,6 +211,9 @@ async function startSession(opts = {}) {
       state.status = 'disconnected';
 
       if (!loggedOut) {
+        // Connection Stability: a normal drop (network blip, Render
+        // free-tier sleep, etc.) must NOT wipe the session — only
+        // reconnect with the existing creds.
         console.log(`⚠️ [whatsapp] Connection closed (Status: ${statusCode}), reconnecting in 3s...`);
         setTimeout(() => startSession(opts).catch(console.error), 3000);
       } else {
@@ -126,8 +225,6 @@ async function startSession(opts = {}) {
         state.pairingCode = null;
 
         try {
-          // FIX: call clearSession directly with the sessionId, not
-          // destructured from useFirestoreAuthState's return value.
           await clearSession(DEFAULT_SESSION_ID);
           console.log('✅ [System] -> Session cleaned. Ready for fresh start.');
           startSession(opts).catch(console.error);
@@ -168,8 +265,6 @@ async function logoutSession() {
       await state.sock.logout();
     } catch (_) {}
   }
-  // FIX: same issue here — clearSession comes from the module import,
-  // not from useFirestoreAuthState().
   await clearSession(DEFAULT_SESSION_ID);
   state.sock = null;
   state.status = 'disconnected';
