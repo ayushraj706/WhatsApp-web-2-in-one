@@ -3,7 +3,8 @@ const express = require('express');
 const cors = require('cors');
 
 // 1. WhatsApp Engine Import (BaseKey CRM Core)
-const { startWhatsAppSession } = require('./whatsapp/session');
+// FIX: Naam 'startSession' kar diya gaya hai, jo session.js export kar raha hai
+const { startSession } = require('./whatsapp/session');
 
 // 2. Route Imports
 const authRoutes = require('./routes/auth');
@@ -69,9 +70,8 @@ app.listen(PORT, async () => {
   try {
     console.log('[system] Starting WhatsApp Baileys Engine...');
     
-    // Agar startWhatsAppSession function properly imported aur file ready hai, tabhi yeh chalega.
-    // Make sure ./whatsapp/session.js exist karta ho.
-    await startWhatsAppSession();
+    // FIX: Sahi function call kiya gaya hai
+    await startSession();
     
   } catch (error) {
     console.error('[system] Failed to start WhatsApp session:', error);
