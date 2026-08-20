@@ -3,7 +3,7 @@ name: Deploy to AWS EC2
 on:
   push:
     branches: [main]
-  workflow_dispatch: # <-- YAHAN SE AAYEGA MANUAL RUN BUTTON
+  workflow_dispatch: # <-- MANUAL RUN BUTTON
 
 jobs:
   deploy:
@@ -12,25 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      # --- Build & basic sanity checks before deploying ---
-      - name: Install & build backend
-        run: |
-          cd backend
-          npm install
-          npm run build --if-present
-
-      - name: Install & build frontend
-        run: |
-          cd frontend
-          npm install
-          npm run build
-
-      # --- Ship code to EC2 over SSH and restart via PM2/Docker ---
+      # --- Ship code to EC2 over SSH and restart via Docker ---
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -72,8 +54,7 @@ jobs:
             # Wait for database to be ready before creating tables
             sleep 10 
 
-            # Run Prisma command to create Database Tables 
-            # (Agar tumhara ORM Prisma hai toh yeh tables bana dega)
+            # Run Prisma command to create Database Tables
             docker compose exec -T backend npx prisma db push
 
             # Prune old images to save EC2 disk space
