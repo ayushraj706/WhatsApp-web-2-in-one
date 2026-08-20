@@ -1,0 +1,121 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------
+// 1. NEXTAUTH STANDARD MODELS (For Google & GitHub Login)
+// ------------------------------------------------------
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ------------------------------------------------------
+// 2. USER MODEL (Extended for SaaS Features)
+// ------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  
+  // NextAuth relations
+  accounts      Account[]
+  sessions      Session[]
+
+  // SaaS Specific Fields
+  fcmToken            String?   // For Firebase Push Notifications
+  waSessionString     String?   @db.Text // To store Baileys WA Session 
+  preferredAiProvider String?   @default("gemini") // "openai", "gemini", "anthropic"
+  
+  // Relations to chats
+  chats         Chat[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ------------------------------------------------------
+// 3. WHATSAPP CLONE & ANTI-DELETE MODELS
+// ------------------------------------------------------
+
+model Chat {
+  id            String    @id @default(cuid())
+  userId        String    // The SaaS User who owns this chat
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  waContactId   String    // WhatsApp Number/ID of the other person
+  contactName   String?
+  
+  messages      Message[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // A user can only have one chat thread per WhatsApp contact
+  @@unique([userId, waContactId])
+}
+
+model Message {
+  id            String    @id @default(cuid())
+  waMessageId   String    @unique // Original WA Message ID from Baileys
+  
+  chatId        String
+  chat          Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  
+  content       String    @db.Text
+  isFromMe      Boolean   @default(false)
+  
+  // Anti-Delete Feature Flag
+  isDeletedBySender Boolean @default(false)
+  
+  // AI Feature Flag
+  isAiGenerated     Boolean @default(false)
+  
+  // Swipe-to-reply feature
+  quotedMessageId   String?
+  
+  timestamp     DateTime  @default(now())
+}
+
