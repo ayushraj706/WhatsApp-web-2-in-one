@@ -22,7 +22,7 @@ export async function requestPushToken() {
   if (permission !== "granted") return null;
 
   // DHYAN DEIN: Yahan apni asli VAPID Key daalni hai
-  return getToken(messaging, { vapidKey: "YAHAN_APNI_VAPID_KEY_PASTE_KARO" }); 
+  return getToken(messaging, { vapidKey: "BH37GF3Wy1MYSsAls9yrw_HNW0nwUN0zc4TXm20Ixlh_L7epWWu3WzZMjJ9dk92KnvWdt7CszLIo-ufcbjiaPA4" }); 
 }
 
 export function listenForPush(callback) {
