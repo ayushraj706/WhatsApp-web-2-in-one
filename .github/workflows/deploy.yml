@@ -3,6 +3,7 @@ name: Deploy to AWS EC2
 on:
   push:
     branches: [main]
+  workflow_dispatch: # <-- YAHAN SE AAYEGA MANUAL RUN BUTTON
 
 jobs:
   deploy:
@@ -67,6 +68,13 @@ jobs:
             # Build & restart containers (Docker-based deploy)
             docker compose down
             docker compose up -d --build
+
+            # Wait for database to be ready before creating tables
+            sleep 10 
+
+            # Run Prisma command to create Database Tables 
+            # (Agar tumhara ORM Prisma hai toh yeh tables bana dega)
+            docker compose exec -T backend npx prisma db push
 
             # Prune old images to save EC2 disk space
             docker image prune -f
