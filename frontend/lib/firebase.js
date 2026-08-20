@@ -1,14 +1,19 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
+// Firebase configuration (Hardcoded - Publicly Safe)
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyA7eSyUGtk5GxSiB3O-3BY5G3p66MdEksY",
+  authDomain: "notification-53600.firebaseapp.com",
+  projectId: "notification-53600",
+  storageBucket: "notification-53600.firebasestorage.app",
+  messagingSenderId: "781765403038",
+  appId: "1:781765403038:web:73f9be7f1092cf4c86b68f",
+  measurementId: "G-7F16PW051F"
 };
 
-const app = initializeApp(firebaseConfig);
+// Next.js safe initialization (Prevent duplicate app errors)
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 export async function requestPushToken() {
   if (typeof window === "undefined") return null;
@@ -16,7 +21,8 @@ export async function requestPushToken() {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return null;
 
-  return getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_VAPID_KEY });
+  // DHYAN DEIN: Yahan apni asli VAPID Key daalni hai
+  return getToken(messaging, { vapidKey: "YAHAN_APNI_VAPID_KEY_PASTE_KARO" }); 
 }
 
 export function listenForPush(callback) {
