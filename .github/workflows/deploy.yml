@@ -21,13 +21,13 @@ jobs:
       - name: Install & build backend
         run: |
           cd backend
-          npm ci
+          npm install
           npm run build --if-present
 
       - name: Install & build frontend
         run: |
           cd frontend
-          npm ci
+          npm install
           npm run build
 
       # --- Ship code to EC2 over SSH and restart via PM2/Docker ---
