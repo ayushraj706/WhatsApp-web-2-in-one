@@ -60,15 +60,9 @@ jobs:
             sed -i '/\.env/d' frontend/.dockerignore || true
             sed -i '/\.env/d' backend/.dockerignore || true
 
-            # Build & restart containers (Docker-based deploy)
+            # Build & restart containers (Bina Prisma push ke taaki crash na ho)
             docker compose down
             docker compose up -d --build
-
-            # Wait for database to be ready before creating tables
-            sleep 10 
-
-            # Run Prisma command to create Database Tables
-            docker compose exec -T backend npx prisma db push
 
             # Prune old images to save EC2 disk space
             docker image prune -f
