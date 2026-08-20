@@ -46,12 +46,14 @@ jobs:
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             ENVEOF
 
-            # Write secrets to frontend .env.local file (NextAuth keys added)
+            # Write secrets to frontend .env.local file (NextAuth aur GitHub keys added)
             cat > frontend/.env.local << 'ENVEOF'
             NEXT_PUBLIC_API_URL=${{ secrets.FRONTEND_URL }}:5000
             NEXT_PUBLIC_FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             NEXTAUTH_URL=${{ secrets.FRONTEND_URL }}
-            NEXTAUTH_SECRET=${{ secrets.JWT_SECRET }}
+            NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+            GITHUB_ID=${{ secrets.GITHUB_ID }}
+            GITHUB_SECRET=${{ secrets.GITHUB_SECRET }}
             ENVEOF
 
             # NAYA STEP: .dockerignore se .env ko hatana taaki Docker in files ko padh sake
@@ -74,4 +76,4 @@ jobs:
       - name: Health check
         run: |
           sleep 10
-          curl -f https://${{ secrets.FRONTEND_URL }}/health || echo "Health check failed — inspect EC2 logs"
+          curl -f ${{ secrets.FRONTEND_URL }}/health || echo "Health check failed — inspect EC2 logs"
