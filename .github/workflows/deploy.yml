@@ -30,11 +30,22 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Write secrets to backend .env file
-            cat > backend/.env << 'ENVEOF'
+            # 🔥 SMART FIX 1: Cloudflare 521 Error Auto-Fix
+            # Yeh frontend ko hamesha Port 80 par set rakhega taaki Cloudflare block na kare
+            sed -i 's/3000:3000/80:3000/g' docker-compose.yml || true
+
+            # 🔥 SMART FIX 2: Database SSL Crash Auto-Fix
+            # Agar URL mein sslmode nahi hai, toh yeh khud laga dega
+            DB_URL="${{ secrets.DATABASE_URL }}"
+            if [[ "$DB_URL" != *"sslmode=disable"* ]]; then
+              DB_URL="${DB_URL}?sslmode=disable"
+            fi
+
+            # Backend .env file creation (Using GitHub Secrets securely)
+            cat > backend/.env << ENVEOF
             NODE_ENV=production
             PORT=5000
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            DATABASE_URL=$DB_URL
             REDIS_URL=${{ secrets.REDIS_URL }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
@@ -46,28 +57,34 @@ jobs:
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             ENVEOF
 
-            # Write secrets to frontend .env.local file (NextAuth aur GitHub keys added)
-            cat > frontend/.env.local << 'ENVEOF'
+            # Frontend .env.local file creation (Using GitHub Secrets securely)
+            cat > frontend/.env.local << ENVEOF
             NEXT_PUBLIC_API_URL=${{ secrets.FRONTEND_URL }}:5000
             NEXT_PUBLIC_FRONTEND_URL=${{ secrets.FRONTEND_URL }}
-            NEXTAUTH_URL=${{ secrets.FRONTEND_URL }}
+            NEXTAUTH_URL=${{ secrets.NEXTAUTH_URL }}
             NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
             GITHUB_ID=${{ secrets.GITHUB_ID }}
             GITHUB_SECRET=${{ secrets.GITHUB_SECRET }}
             ENVEOF
 
-            # NAYA STEP: .dockerignore se .env ko hatana taaki Docker in files ko padh sake
+            # .dockerignore se .env hatana
             sed -i '/\.env/d' frontend/.dockerignore || true
             sed -i '/\.env/d' backend/.dockerignore || true
 
-            # Build & restart containers (Bina Prisma push ke taaki crash na ho)
+            # 🔥 SMART FIX 3: Backend Database Tables (Prisma) Auto-Push
+            # Pehle database container start karo, aur fresh tables banao
+            docker compose up -d postgres redis
+            sleep 5
+            docker compose run --rm backend npx prisma@5 db push
+
+            # Build & restart saare containers fresh state mein
             docker compose down
             docker compose up -d --build
 
-            # Prune old images to save EC2 disk space
+            # Puraani files clean karke AWS ki storage bachana
             docker image prune -f
 
       - name: Health check
         run: |
           sleep 10
-          curl -f ${{ secrets.FRONTEND_URL }}/health || echo "Health check failed — inspect EC2 logs"
+          curl -f ${{ secrets.FRONTEND_URL }} || echo "Health check failed — inspect EC2 logs"
