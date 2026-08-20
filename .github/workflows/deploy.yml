@@ -3,7 +3,7 @@ name: Deploy to AWS EC2
 on:
   push:
     branches: [main]
-  workflow_dispatch: # <-- MANUAL RUN BUTTON
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -12,7 +12,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- Ship code to EC2 over SSH and restart via Docker ---
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -47,11 +46,17 @@ jobs:
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             ENVEOF
 
-            # Write secrets to frontend .env.local file (Naya Step)
+            # Write secrets to frontend .env.local file (NextAuth keys added)
             cat > frontend/.env.local << 'ENVEOF'
-            NEXT_PUBLIC_API_URL=http://localhost:5000
+            NEXT_PUBLIC_API_URL=${{ secrets.FRONTEND_URL }}:5000
             NEXT_PUBLIC_FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            NEXTAUTH_URL=${{ secrets.FRONTEND_URL }}
+            NEXTAUTH_SECRET=${{ secrets.JWT_SECRET }}
             ENVEOF
+
+            # NAYA STEP: .dockerignore se .env ko hatana taaki Docker in files ko padh sake
+            sed -i '/\.env/d' frontend/.dockerignore || true
+            sed -i '/\.env/d' backend/.dockerignore || true
 
             # Build & restart containers (Docker-based deploy)
             docker compose down
