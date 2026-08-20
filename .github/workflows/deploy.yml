@@ -31,7 +31,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Write secrets to .env files (never committed to the repo)
+            # Write secrets to backend .env file
             cat > backend/.env << 'ENVEOF'
             NODE_ENV=production
             PORT=5000
@@ -45,6 +45,12 @@ jobs:
             FCM_CLIENT_EMAIL=${{ secrets.FCM_CLIENT_EMAIL }}
             FCM_PRIVATE_KEY=${{ secrets.FCM_PRIVATE_KEY }}
             FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            ENVEOF
+
+            # Write secrets to frontend .env.local file (Naya Step)
+            cat > frontend/.env.local << 'ENVEOF'
+            NEXT_PUBLIC_API_URL=http://localhost:5000
+            NEXT_PUBLIC_FRONTEND_URL=${{ secrets.FRONTEND_URL }}
             ENVEOF
 
             # Build & restart containers (Docker-based deploy)
