@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+android/
+.env
+.env.local
+backend/wa_sessions/*
+!backend/wa_sessions/.gitkeep
+backend/media/*
+!backend/media/.gitkeep

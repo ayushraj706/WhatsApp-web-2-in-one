@@ -1,0 +1,77 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # --- Build & basic sanity checks before deploying ---
+      - name: Install & build backend
+        run: |
+          cd backend
+          npm ci
+          npm run build --if-present
+
+      - name: Install & build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      # --- Ship code to EC2 over SSH and restart via PM2/Docker ---
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            APP_DIR=/home/${{ secrets.EC2_USER }}/whatsapp-saas-clone
+
+            if [ ! -d "$APP_DIR" ]; then
+              git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Write secrets to .env files (never committed to the repo)
+            cat > backend/.env << 'ENVEOF'
+            NODE_ENV=production
+            PORT=5000
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            REDIS_URL=${{ secrets.REDIS_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+            FCM_PROJECT_ID=${{ secrets.FCM_PROJECT_ID }}
+            FCM_CLIENT_EMAIL=${{ secrets.FCM_CLIENT_EMAIL }}
+            FCM_PRIVATE_KEY=${{ secrets.FCM_PRIVATE_KEY }}
+            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            ENVEOF
+
+            # Build & restart containers (Docker-based deploy)
+            docker compose down
+            docker compose up -d --build
+
+            # Prune old images to save EC2 disk space
+            docker image prune -f
+
+      - name: Health check
+        run: |
+          sleep 10
+          curl -f https://${{ secrets.FRONTEND_URL }}/health || echo "Health check failed — inspect EC2 logs"

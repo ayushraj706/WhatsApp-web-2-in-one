@@ -1,0 +1,37 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: whatsapp_saas
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports: ["6379:6379"]
+    volumes: ["redisdata:/data"]
+
+  backend:
+    build: ./backend
+    restart: always
+    env_file: ./backend/.env
+    ports: ["5000:5000"]
+    depends_on: [postgres, redis]
+    volumes:
+      - ./backend/wa_sessions:/app/wa_sessions   # persisted Baileys auth state
+
+  frontend:
+    build: ./frontend
+    restart: always
+    env_file: ./frontend/.env.local
+    ports: ["3000:3000"]
+    depends_on: [backend]
+
+volumes:
+  pgdata:
+  redisdata:
