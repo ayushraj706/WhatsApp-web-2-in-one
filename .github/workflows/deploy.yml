@@ -77,8 +77,8 @@ jobs:
             docker compose up -d postgres redis
             sleep 5
             
-            # Wahi magical command jo humne pehle chalayi thi OpenSSL error hatane ke liye!
-            docker run --rm -v $(pwd)/backend:/app -w /app --env-file backend/.env --network whatsapp-saas-clone_default node:20 npx prisma@5 db push
+            # Wahi magical command jo humne pehle chalayi thi OpenSSL error hatane ke liye! Data loss accept flag added.
+            docker run --rm -v $(pwd)/backend:/app -w /app --env-file backend/.env --network whatsapp-saas-clone_default node:20 npx prisma@5 db push --accept-data-loss
 
             # Build & restart saare containers fresh state mein
             docker compose down
