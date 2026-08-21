@@ -65,6 +65,7 @@ jobs:
             NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
             GITHUB_ID=${{ secrets.GITHUB_ID }}
             GITHUB_SECRET=${{ secrets.GITHUB_SECRET }}
+            BACKEND_URL=http://backend:5000
             ENVEOF
 
             # .dockerignore se .env hatana
